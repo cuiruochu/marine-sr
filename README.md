@@ -46,7 +46,7 @@ def create_edsr_single(params, in_dim, upscale):
 ```
 
 **实际修改（已完成）：**
-- 新建 `src/models/registry.py`：提供 `@register_model` 和 `@register_unified_model` 装饰器
+- 新建 `src/models/registry.py`：提供 `@register_model` 装饰器
 - 新建 `src/models/base.py`：提供 `create_model_result()` 和 `merge_params()` 工具函数
 - 新建 `src/models/bicubic.py`：Bicubic 基线模型工厂
 - 修改所有模型文件（EDSR, RCAN, RDN, MySR, MySRAb, SwinIR, ATD, CAMixer）：添加工厂函数和装饰器
@@ -147,53 +147,23 @@ paths:
 
 ## 二、可测试性问题
 
-### 6. 缺少单元测试
+### 6. 缺少单元测试 ✅ 已完成
 
-**现状：** 项目无任何测试代码
-
-**问题：**
-- 无法验证模型实现正确性
-- 重构时无法保证不破坏现有功能
-- 无法验证数据加载逻辑
+**现状：** 已添加单元测试
 
 **解决方案：** 添加测试目录
 
 ```
 tests/
-├── test_models.py      # 确保模型能跑
-└── test_datasets.py    # 确保数据能加载
+├── conftest.py          # pytest 配置
+├── test_models.py       # 确保模型能跑 (32 tests)
+└── test_datasets.py     # 确保数据加载对 (12 tests)
 ```
 
 | 文件 | 测试点 | 目的 |
 |------|--------|------|
-| test_models.py | forward、upscale、in_dim | 确保模型能跑、shape 对 |
+| test_models.py | forward、upscale、in_dim、params | 确保模型能跑、shape 对、参数生效 |
 | test_datasets.py | getitem、normalization、mwd_encoding | 确保数据加载对、预处理对 |
-
-**test_models.py：**
-
-```python
-def test_model_forward():
-    """所有模型能否正常前向传播"""
-
-def test_model_upscale():
-    """不同 upscale (2, 4) 输出 shape 是否正确"""
-
-def test_model_in_dim():
-    """不同输入通道 (1 或 2) 是否正常"""
-```
-
-**test_datasets.py：**
-
-```python
-def test_dataset_getitem():
-    """__getitem__ 返回的 lr, hr shape 是否正确"""
-
-def test_normalization():
-    """归一化是否正确"""
-
-def test_mwd_encoding():
-    """mwd 的 cos/sin 编码是否正确"""
-```
 
 ---
 
@@ -384,13 +354,13 @@ logger.info(f"Total trainable parameters: {total_params}")
 
 ## 六、总结
 
-| 问题类别 | 问题数量 | 优先级 |
-|----------|----------|--------|
-| 可扩展性 | 5 | 高 |
-| 可测试性 | 1 | 高 |
-| 可复现性 | 2 | 中 |
-| 可追踪性 | 1 | 中 |
-| 代码规范 | 2 | 低 |
+| 问题类别 | 问题数量 | 状态 |
+|----------|----------|------|
+| 可扩展性 | 5 | ✅ 已完成 |
+| 可测试性 | 1 | ✅ 已完成 |
+| 可复现性 | 2 | ✅ 已完成 |
+| 可追踪性 | 1 | ⏳ 待完成 |
+| 代码规范 | 2 | ✅ 已完成 |
 
 **建议重构顺序：**
 
@@ -487,23 +457,15 @@ logger.info(f"Total trainable parameters: {total_params}")
 MODEL_REGISTRY: Dict[str, ModelInfo] = {}
 
 def register_model(name: str, default_params: dict = None):
-    """注册单参数模型"""
+    """注册模型"""
     def decorator(factory):
         MODEL_REGISTRY[name] = ModelInfo(name=name, factory=factory, ...)
         return factory
     return decorator
 
-def register_unified_model(name: str, default_params: dict = None):
-    """注册统一模型（支持多参数训练）"""
-    ...
-
 # src/models/EDSR.py
 @register_model("EDSR", default_params={"n_feats": 64, "n_resblocks": 16})
 def create_edsr_single(params, in_dim, upscale):
-    ...
-
-@register_unified_model("EDSR", default_params={"n_feats": 64})
-def create_edsr_unified(params, upscale):
     ...
 
 # src/models/__init__.py
@@ -518,10 +480,10 @@ def create_model(config):
 - `src/models/bicubic.py` - Bicubic 基线模型工厂
 
 **修改文件：**
-- `src/models/EDSR.py` - 添加 `@register_model` + `@register_unified_model`
-- `src/models/RCAN.py` - 添加 `@register_model` + `@register_unified_model`
-- `src/models/RDN.py` - 添加 `@register_model` + `@register_unified_model`
-- `src/models/MySR.py` - 添加 `@register_model` + `@register_unified_model`
+- `src/models/EDSR.py` - 添加 `@register_model`
+- `src/models/RCAN.py` - 添加 `@register_model`
+- `src/models/RDN.py` - 添加 `@register_model`
+- `src/models/MySR.py` - 添加 `@register_model`
 - `src/models/MySRAb.py` - 添加 `@register_model`（MySRAb1, MySRAb2）
 - `src/models/SwinIR.py` - 添加 `@register_model`
 - `src/models/ATD.py` - 添加 `@register_model`
@@ -530,18 +492,18 @@ def create_model(config):
 
 **支持的模型：**
 
-| 模型 | 单模型 | 统一模型 | 默认参数 |
-|------|--------|----------|----------|
-| Bicubic | ✓ | ✗ | - |
-| EDSR | ✓ | ✓ | `n_feats=64, n_resblocks=16` |
-| RCAN | ✓ | ✓ | `n_feats=64, n_resgroups=3, n_resblocks=4` |
-| RDN | ✓ | ✓ | `n_features=64, n_blocks=6, layers=4` |
-| MySR | ✓ | ✓ | `num_features=64, n_blocks=5` |
-| MySRAb1 | ✓ | ✗ | `num_features=76, n_blocks=5` |
-| MySRAb2 | ✓ | ✗ | `num_features=66, n_blocks=5` |
-| SwinIR | ✓ | ✗ | `embed_dim=60, window_size=8` |
-| ATD | ✓ | ✗ | `embed_dim=48, window_size=16` |
-| CAMixer | ✓ | ✗ | `n_feats=60, ratio=0.5` |
+| 模型 | 默认参数 |
+|------|----------|
+| Bicubic | - |
+| EDSR | `n_feats=64, n_resblocks=16` |
+| RCAN | `n_feats=64, n_resgroups=3, n_resblocks=4` |
+| RDN | `n_features=64, n_blocks=6, layers=4` |
+| MySR | `num_features=64, n_blocks=5` |
+| MySRAb1 | `num_features=76, n_blocks=5` |
+| MySRAb2 | `num_features=66, n_blocks=5` |
+| SwinIR | `embed_dim=60, window_size=8` |
+| ATD | `embed_dim=48, window_size=16` |
+| CAMixer | `n_feats=60, ratio=0.5` |
 
 #### 4.2 Dataset 参数配置化
 
@@ -631,15 +593,55 @@ git commit -m "feat: 完成第一阶段和第二阶段重构"
 
 **初始提交：** `0f01536`
 
-### ⏳ 第三阶段：验证与完善（待开始）
+### ✅ 第三阶段：验证与完善（已完成）
 
-| 步骤 | 状态 |
-|------|------|
-| 6. 单元测试 | ⏳ 待开始 |
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| 6. 单元测试 | ✅ 完成 | tests/test_models.py, tests/test_datasets.py |
+
+#### 6.1 测试结构
+
+```
+tests/
+├── conftest.py          # pytest 配置
+├── test_models.py       # 模型测试
+└── test_datasets.py     # 数据集测试
+```
+
+#### 6.2 测试覆盖
+
+**test_models.py (32 tests)**
+| 测试类 | 测试点 | 目的 |
+|--------|--------|------|
+| TestModelRegistry | list_models, get_model_info | 注册机制正常工作 |
+| TestModelForward | forward, shape | 模型能跑、输出正确 |
+| TestModelUpscale | upscale 2/4 | 不同放大倍数正确 |
+| TestModelParams | default/custom params | 参数配置生效 |
+
+**test_datasets.py (12 tests)**
+| 测试类 | 测试点 | 目的 |
+|--------|--------|------|
+| TestHelperFunctions | _is_mwd_param | 辅助函数正确 |
+| TestEncodeMWD | shape, values | MWD 编码正确 |
+| TestNormalize | shape, values | 归一化正确 |
+| TestMarineTestSet | length, getitem | 测试集加载正确 |
+| TestMarineTrainSet | length, getitem | 训练集加载正确 |
+
+#### 6.3 运行测试
+
+```bash
+# 安装依赖
+uv sync --extra all
+
+# 运行测试
+uv run pytest tests/ -v
+```
+
+**测试结果：** 44 passed, 3 skipped (Bicubic, CAMixer 兼容性)
 
 ### ⏳ 第四阶段：增强功能（待开始）
 
-| 步骤 | 状态 |
-|------|------|
-| 7. 实验管理 | ⏳ 待开始 |
-| 8. 日志系统 | ⏳ 待开始 |
+| 步骤 | 状态 | 说明 |
+|------|------|------|
+| 7. 实验管理 | ⏳ 待开始 | 依赖配置文件 + PROJECT_ROOT |
+| 8. 日志系统 | ⏳ 待开始 | print → logging |

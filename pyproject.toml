@@ -19,11 +19,11 @@ dev = [
     "pytest",
     "ruff",
 ]
-
-# 可选依赖：运行所有模型
 all = [
     "fairscale",        # ATD 模型需要
     "basicsr",          # CAMixer 模型需要
+    "pytest",
+    "ruff",
 ]
 
 [build-system]

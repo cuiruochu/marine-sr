@@ -3,7 +3,12 @@
     "allow": [
       "Bash(cd:*)",
       "Bash(uv sync:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git:*)",
+      "Bash(.venv/Scripts/pytest tests/ -v --tb=short 2>&1 | head -80)",
+      "Bash(.venv/Scripts/pytest tests/ -v --tb=short 2>&1 | head -100)",
+      "Bash(.venv/Scripts/pytest tests/ -v --tb=short 2>&1)"
     ]
   }
 }
