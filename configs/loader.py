@@ -45,7 +45,6 @@ class TrainConfig:
     eval_mask: str = ""
 
     # 派生字段
-    unified: bool = False
     mean: list = field(default_factory=list)
     std: list = field(default_factory=list)
     in_dim: int = 1
@@ -163,7 +162,6 @@ class TestConfig:
     eval_mask: str = ""
 
     # 派生字段
-    unified: bool = False
     mean: list = field(default_factory=list)
     std: list = field(default_factory=list)
     in_dim: int = 1

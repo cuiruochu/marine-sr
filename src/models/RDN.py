@@ -99,9 +99,8 @@ class RDN(nn.Module):
 
 # ============== Model Factory ==============
 
-from .registry import register_model, register_unified_model
+from .registry import register_model
 from .base import create_model_result, merge_params
-from .MWDEncoder import Encoder, Decoder
 
 # 默认参数
 RDN_DEFAULT_PARAMS = {
@@ -126,30 +125,4 @@ def create_rdn_single(params: dict, in_dim: int, upscale: int):
 
     model_name = f"RDN_f{p['n_features']}_n{p['n_blocks'] * p['layers']}_x{upscale}"
     return create_model_result(model, model_name)
-
-
-@register_unified_model("RDN", default_params=RDN_DEFAULT_PARAMS)
-def create_rdn_unified(params: dict, upscale: int):
-    """统一 RDN 模型工厂（支持多参数训练）"""
-    p = merge_params(RDN_DEFAULT_PARAMS, params)
-    n_features = p["n_features"]
-
-    mwd_encoder = Encoder(in_ch=2, hidden_dim=n_features)
-    other_encoder = Encoder(in_ch=1, hidden_dim=n_features)
-    mwd_decoder = Decoder(hidden_dim=n_features, out_ch=2)
-    other_decoder = Decoder(hidden_dim=n_features, out_ch=1)
-
-    model = RDN(
-        n_colors=n_features,
-        scale=upscale,
-        n_features=n_features,
-        n_blocks=p["n_blocks"],
-        layers=p["layers"]
-    )
-
-    model_name = f"RDN_f{n_features}_n{p['n_blocks'] * p['layers']}_x{upscale}"
-    return create_model_result(
-        model, model_name,
-        mwd_encoder, other_encoder, mwd_decoder, other_decoder
-    )
 

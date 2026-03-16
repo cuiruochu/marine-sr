@@ -124,9 +124,8 @@ class MySR(nn.Module):
 
 # ============== Model Factory ==============
 
-from .registry import register_model, register_unified_model
+from .registry import register_model
 from .base import create_model_result, merge_params
-from .MWDEncoder import Encoder, Decoder
 
 # 默认参数
 MYSR_DEFAULT_PARAMS = {
@@ -149,28 +148,3 @@ def create_mysr_single(params: dict, in_dim: int, upscale: int):
 
     model_name = f"MySR_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
     return create_model_result(model, model_name)
-
-
-@register_unified_model("MySR", default_params=MYSR_DEFAULT_PARAMS)
-def create_mysr_unified(params: dict, upscale: int):
-    """统一 MySR 模型工厂（支持多参数训练）"""
-    p = merge_params(MYSR_DEFAULT_PARAMS, params)
-    num_features = p["num_features"]
-
-    mwd_encoder = Encoder(in_ch=2, hidden_dim=num_features)
-    other_encoder = Encoder(in_ch=1, hidden_dim=num_features)
-    mwd_decoder = Decoder(hidden_dim=num_features, out_ch=2)
-    other_decoder = Decoder(hidden_dim=num_features, out_ch=1)
-
-    model = MySR(
-        upscale=upscale,
-        in_ch=num_features,
-        num_features=num_features,
-        n_blocks=p["n_blocks"]
-    )
-
-    model_name = f"MySR_f{num_features}_n{p['n_blocks']}_x{upscale}"
-    return create_model_result(
-        model, model_name,
-        mwd_encoder, other_encoder, mwd_decoder, other_decoder
-    )

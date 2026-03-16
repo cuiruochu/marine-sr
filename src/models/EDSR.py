@@ -46,9 +46,8 @@ class EDSR(nn.Module):
 
 # ============== Model Factory ==============
 
-from .registry import register_model, register_unified_model
+from .registry import register_model
 from .base import create_model_result, merge_params
-from .MWDEncoder import Encoder, Decoder
 
 # 默认参数
 EDSR_DEFAULT_PARAMS = {
@@ -73,24 +72,4 @@ def create_edsr_single(params: dict, in_dim: int, upscale: int):
 
     model_name = f"EDSR_f{p['n_feats']}_n{p['n_resblocks']}_x{upscale}"
     return create_model_result(model, model_name)
-
-
-@register_unified_model("EDSR", default_params=EDSR_DEFAULT_PARAMS)
-def create_edsr_unified(params: dict, upscale: int):
-    """统一 EDSR 模型工厂（支持多参数训练）"""
-    p = merge_params(EDSR_DEFAULT_PARAMS, params)
-    n_feats = p["n_feats"]
-
-    mwd_encoder = Encoder(in_ch=2, hidden_dim=n_feats)
-    other_encoder = Encoder(in_ch=1, hidden_dim=n_feats)
-    mwd_decoder = Decoder(hidden_dim=n_feats, out_ch=2)
-    other_decoder = Decoder(hidden_dim=n_feats, out_ch=1)
-
-    model = EDSR(upscale, n_feats, n_feats, p["n_resblocks"], res_scale=p["res_scale"])
-
-    model_name = f"EDSR_f{n_feats}_n{p['n_resblocks']}_x{upscale}"
-    return create_model_result(
-        model, model_name,
-        mwd_encoder, other_encoder, mwd_decoder, other_decoder
-    )
 

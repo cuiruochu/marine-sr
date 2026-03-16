@@ -14,17 +14,12 @@ ModelFactory = Callable[[dict, int, int], Dict[str, Any]]
 # 参数: (model_params, in_dim, upscale)
 # 返回: {"model": model, "model_name": str}
 
-UnifiedModelFactory = Callable[[dict, int], Dict[str, Any]]
-# 参数: (model_params, upscale)
-# 返回: {"model": model, "model_name": str, "mwd_encoder": ..., ...}
-
 
 @dataclass
 class ModelInfo:
     """注册模型的信息"""
     name: str
     factory: Optional[ModelFactory] = None
-    unified_factory: Optional[UnifiedModelFactory] = None
     default_params: dict = None
 
 
@@ -58,36 +53,6 @@ def register_model(name: str, default_params: dict = None):
     return decorator
 
 
-def register_unified_model(name: str, default_params: dict = None):
-    """
-    注册统一模型的装饰器（支持多参数训练）。
-
-    Args:
-        name: 模型名称
-        default_params: 默认参数字典
-
-    Usage:
-        @register_unified_model("EDSR", default_params={"n_feats": 64})
-        def create_edsr_unified(params, upscale):
-            ...
-
-    Returns:
-        装饰器函数
-    """
-    def decorator(factory: UnifiedModelFactory):
-        if name in MODEL_REGISTRY:
-            # 已存在单模型注册，添加统一工厂
-            MODEL_REGISTRY[name].unified_factory = factory
-        else:
-            MODEL_REGISTRY[name] = ModelInfo(
-                name=name,
-                unified_factory=factory,
-                default_params=default_params or {}
-            )
-        return factory
-    return decorator
-
-
 def get_model_info(name: str) -> ModelInfo:
     """
     从注册表获取模型信息。
@@ -111,9 +76,3 @@ def get_model_info(name: str) -> ModelInfo:
 def list_models() -> list:
     """列出所有已注册模型"""
     return list(MODEL_REGISTRY.keys())
-
-
-def list_unified_models() -> list:
-    """列出支持统一训练的模型"""
-    return [name for name, info in MODEL_REGISTRY.items()
-            if info.unified_factory is not None]
