@@ -1,0 +1,24 @@
+# 训练配置文件
+# 运行前根据需要修改此文件
+
+model:
+  name: EDSR
+  params:
+    n_feats: 64
+    n_resblocks: 16
+
+dataset:
+  marine_param: wind  # wind / mwd / mwp / swh
+  upscale: 2          # 2 / 4
+  lr_patch_size: 30   # x2: 30, x4: 15
+
+train:
+  epochs: 200
+  batch_size: 16
+  lr: 2e-4
+
+paths:
+  train_root: /data/marine/Train/wind
+  val_root: /data/marine/Test/wind
+  checkpoint_dir: ./checkpoints
+  eval_mask: ./masks/wave_mask.npy

@@ -1,0 +1,28 @@
+# 默认配置
+# 包含归一化参数、有效海洋参数等公共配置
+
+# 归一化参数（各海洋参数的均值和标准差）
+normalize:
+  wind:
+    mean: [4.565732]
+    std: [3.1361]
+  mwd:
+    mean: [0.501979, 0.223533]
+    std: [0.650492, 0.524320]
+  mwp:
+    mean: [3.816070]
+    std: [3.3274]
+  swh:
+    mean: [0.812000]
+    std: [0.9408]
+
+# 海洋参数配置
+marine_params:
+  # 有效的海洋参数列表
+  valid: [wind, mwd, mwp, swh]
+  # 各参数的通道数
+  channels:
+    wind: 1
+    mwd: 2
+    mwp: 1
+    swh: 1
