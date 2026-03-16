@@ -438,18 +438,27 @@ logger.info(f"Total trainable parameters: {total_params}")
 
 ```
 第三章/
+├── .git/                   # Git 仓库
+├── .gitignore              # Git 忽略配置
+├── .venv/                  # 虚拟环境（uv 创建）
+├── pyproject.toml          # 依赖管理
+├── README.md               # 重构文档
+├── CLAUDE.md               # 项目说明
 ├── src/                    # 源码
-│   ├── models/
-│   ├── datasets/
-│   ├── trainers/
-│   ├── testers/
-│   └── utils/
+│   ├── models/             # 模型（含注册机制）
+│   │   ├── registry.py     # 模型注册
+│   │   ├── base.py         # 工具函数
+│   │   └── *.py            # 各模型实现
+│   ├── datasets/           # 数据集
+│   ├── trainers/           # 训练器
+│   ├── testers/            # 测试器
+│   └── utils/              # 工具（含 PROJECT_ROOT）
 ├── configs/                # 配置文件
-│   ├── default.yaml
-│   ├── train.yaml
-│   ├── test.yaml
-│   └── loader.py
-├── scripts/               # 入口脚本
+│   ├── default.yaml        # 默认配置（归一化、参数列表）
+│   ├── train.yaml          # 训练配置
+│   ├── test.yaml           # 测试配置
+│   └── loader.py           # 配置加载器
+├── scripts/                # 入口脚本
 │   ├── train.py
 │   ├── eval.py
 │   └── find_lr.py
@@ -464,18 +473,163 @@ logger.info(f"Total trainable parameters: {total_params}")
 |------|------|------|
 | 4. 模型注册机制 | ✅ 完成 | 新建 registry.py, base.py, bicubic.py；各模型添加工厂函数 |
 | 5. Dataset 参数配置化 | ✅ 完成 | 配置验证移至 TrainConfig/TestConfig；移除 if-elif |
+| 6. 依赖管理 | ✅ 完成 | 新建 pyproject.toml，使用 uv 管理依赖 |
+| 7. Git 初始化 | ✅ 完成 | git init，创建初始提交 |
+
+#### 4.1 模型注册机制
+
+**目标：** 添加新模型只需在模型文件中加装饰器，无需修改 `__init__.py`
+
+**实现：**
+
+```python
+# src/models/registry.py
+MODEL_REGISTRY: Dict[str, ModelInfo] = {}
+
+def register_model(name: str, default_params: dict = None):
+    """注册单参数模型"""
+    def decorator(factory):
+        MODEL_REGISTRY[name] = ModelInfo(name=name, factory=factory, ...)
+        return factory
+    return decorator
+
+def register_unified_model(name: str, default_params: dict = None):
+    """注册统一模型（支持多参数训练）"""
+    ...
+
+# src/models/EDSR.py
+@register_model("EDSR", default_params={"n_feats": 64, "n_resblocks": 16})
+def create_edsr_single(params, in_dim, upscale):
+    ...
+
+@register_unified_model("EDSR", default_params={"n_feats": 64})
+def create_edsr_unified(params, upscale):
+    ...
+
+# src/models/__init__.py
+def create_model(config):
+    info = get_model_info(config.model_name)
+    return info.factory(params, config.in_dim, config.upscale)
+```
 
 **新增文件：**
-- `src/models/registry.py` - 模型注册机制
-- `src/models/base.py` - 工具函数
-- `src/models/bicubic.py` - Bicubic 基线模型
+- `src/models/registry.py` - 模型注册机制核心
+- `src/models/base.py` - `create_model_result()`, `merge_params()` 工具函数
+- `src/models/bicubic.py` - Bicubic 基线模型工厂
 
 **修改文件：**
-- `src/models/*.py` - 各模型添加 `@register_model` 装饰器和工厂函数
-- `src/models/__init__.py` - 使用注册表查找模型
-- `configs/default.yaml` - 添加 `marine_params` 配置
-- `configs/loader.py` - 添加 `_validate()` 验证方法
+- `src/models/EDSR.py` - 添加 `@register_model` + `@register_unified_model`
+- `src/models/RCAN.py` - 添加 `@register_model` + `@register_unified_model`
+- `src/models/RDN.py` - 添加 `@register_model` + `@register_unified_model`
+- `src/models/MySR.py` - 添加 `@register_model` + `@register_unified_model`
+- `src/models/MySRAb.py` - 添加 `@register_model`（MySRAb1, MySRAb2）
+- `src/models/SwinIR.py` - 添加 `@register_model`
+- `src/models/ATD.py` - 添加 `@register_model`
+- `src/models/CAMixer.py` - 添加 `@register_model`
+- `src/models/__init__.py` - 重写，使用注册表查找模型
+
+**支持的模型：**
+
+| 模型 | 单模型 | 统一模型 | 默认参数 |
+|------|--------|----------|----------|
+| Bicubic | ✓ | ✗ | - |
+| EDSR | ✓ | ✓ | `n_feats=64, n_resblocks=16` |
+| RCAN | ✓ | ✓ | `n_feats=64, n_resgroups=3, n_resblocks=4` |
+| RDN | ✓ | ✓ | `n_features=64, n_blocks=6, layers=4` |
+| MySR | ✓ | ✓ | `num_features=64, n_blocks=5` |
+| MySRAb1 | ✓ | ✗ | `num_features=76, n_blocks=5` |
+| MySRAb2 | ✓ | ✗ | `num_features=66, n_blocks=5` |
+| SwinIR | ✓ | ✗ | `embed_dim=60, window_size=8` |
+| ATD | ✓ | ✗ | `embed_dim=48, window_size=16` |
+| CAMixer | ✓ | ✗ | `n_feats=60, ratio=0.5` |
+
+#### 4.2 Dataset 参数配置化
+
+**目标：** 移除 if-elif 参数验证，改为配置验证
+
+**实现：**
+
+```yaml
+# configs/default.yaml
+marine_params:
+  valid: [wind, mwd, mwp, swh]
+  channels:
+    wind: 1
+    mwd: 2
+    mwp: 1
+    swh: 1
+```
+
+```python
+# configs/loader.py
+class TrainConfig:
+    def _validate(self):
+        if self.marine_param not in self._valid_params:
+            raise ValueError(f"无效的 marine_param '{self.marine_param}'")
+
+# src/datasets/dataset.py
+def _is_mwd_param(marine_param: str) -> bool:
+    return marine_param.lower() == "mwd"
+
+def get_loader(train_cfg, val_cfg, batch_size):
+    # 配置验证已在 TrainConfig 中完成，无需 if-elif
+    train_set = MarineTrainSet(..., is_mwd=_is_mwd_param(train_cfg.marine_param))
+```
+
+**修改文件：**
+- `configs/default.yaml` - 添加 `marine_params.valid` 和 `marine_params.channels`
+- `configs/loader.py` - `TrainConfig` 和 `TestConfig` 添加 `_validate()` 方法
 - `src/datasets/dataset.py` - 移除 if-elif，添加 `_is_mwd_param()` 辅助函数
+
+#### 4.3 依赖管理
+
+**目标：** 使用 uv 管理依赖，确保环境可复现
+
+**实现：**
+
+```toml
+# pyproject.toml
+[project]
+name = "marine-sr"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "numpy",
+    "tqdm",
+    "wandb",
+    "pyyaml",
+    "scipy",
+    "einops",
+    "timm",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+all = ["fairscale", "basicsr"]  # ATD, CAMixer 模型需要
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+```
+
+**使用方法：**
+```bash
+# 安装核心依赖
+uv sync
+
+# 安装全部依赖（包括可选模型）
+uv sync --extra all
+```
+
+#### 4.4 Git 初始化
+
+```bash
+git init
+git add .gitignore CLAUDE.md README.md configs/ pyproject.toml scripts/ src/
+git commit -m "feat: 完成第一阶段和第二阶段重构"
+```
+
+**初始提交：** `0f01536`
 
 ### ⏳ 第三阶段：验证与完善（待开始）
 
