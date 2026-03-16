@@ -266,15 +266,11 @@ def resolve_path(path_str: str) -> Path:
 
 ## 四、可追踪性问题
 
-### 9. 实验与配置分离
+### 9. 实验与配置分离 ✅ 已完成
 
-**现状：** 使用 wandb offline，配置与 checkpoint 未关联
+**现状：** 已实现实验管理
 
-**问题：**
-- 不知道哪个 checkpoint 对应哪个配置
-- 实验多了难以对比和复现
-
-**解决方案：** 每次实验生成独立目录，把相关文件放一起
+**解决方案：** 每次实验生成独立目录
 
 ```
 experiments/
@@ -283,31 +279,16 @@ experiments/
 │   ├── train_log.json     # 训练曲线
 │   └── checkpoints/
 │       ├── epoch_10.pth
-│       └── epoch_20.pth
-└── exp_20240316_rcan_mwp_x4/
-    ├── config.yaml
-    ├── train_log.json
-    └── checkpoints/
+│       └── best.pth
 ```
 
-**同时：** 用实验目录名作为 wandb 的实验名，保持关联
-
-```python
-# 训练脚本中
-exp_name = "exp_20240315_edsr_wind_x2"
-wandb.init(
-    project="Marine-Parameters-SupervisedSR",
-    name=exp_name,  # 与目录名一致
-)
-```
-
-这样 wandb 中的实验名与本地目录名对应，方便查找
+**实现：** `src/utils/experiment.py`
 
 ---
 
 ## 五、代码规范问题
 
-### 10. 目录命名不一致
+### 10. 目录命名不一致 ✅ 已完成
 
 **现状：** 已完成重命名，统一使用复数
 
@@ -324,31 +305,21 @@ configs/        ✓
 
 ---
 
-### 11. 使用 print 而非日志系统
+### 11. 使用 print 而非日志系统 ✅ 已完成
 
-**现状：** 所有输出使用 print
-
-```python
-print("当前训练 unified 模型!!!")
-print(f"Total trainable parameters: {total_params}")
-```
-
-**问题：**
-- 无法控制日志级别
-- 无法持久化日志
-- 无法追踪问题
+**现状：** 已实现日志系统
 
 **解决方案：** 使用 Python logging 模块
 
 ```python
-import logging
+from src.utils import get_logger, info, warning
 
-logger = logging.getLogger(__name__)
-
-# 使用
-logger.info("当前训练 unified 模型")
+logger = get_logger()
+logger.info("当前训练模型")
 logger.info(f"Total trainable parameters: {total_params}")
 ```
+
+**实现：** `src/utils/logging.py`
 
 ---
 
@@ -359,37 +330,10 @@ logger.info(f"Total trainable parameters: {total_params}")
 | 可扩展性 | 5 | ✅ 已完成 |
 | 可测试性 | 1 | ✅ 已完成 |
 | 可复现性 | 2 | ✅ 已完成 |
-| 可追踪性 | 1 | ⏳ 待完成 |
+| 可追踪性 | 1 | ✅ 已完成 |
 | 代码规范 | 2 | ✅ 已完成 |
 
-**建议重构顺序：**
-
-```
-第一阶段：基础设施
-1. 目录重命名（问题 10）── 先改，后续不用改 import
-2. PROJECT_ROOT（问题 8 的一部分）── 路径解析基础
-3. YAML 配置文件系统（问题 3-5, 8）── 核心基础
-
-第二阶段：核心重构
-4. 模型注册机制（问题 1）── 依赖配置文件
-5. Dataset 参数配置化（问题 2）── 依赖配置文件
-
-第三阶段：验证与完善
-6. 单元测试（问题 6）── 重构完成后再写
-
-第四阶段：增强功能
-7. 实验管理（问题 9）── 依赖配置文件
-8. 日志系统（问题 11）── 独立
-```
-
-**依赖关系：**
-
-| 问题 | 依赖 |
-|------|------|
-| 模型注册（问题 1） | 需要配置文件提供模型名和参数 |
-| Dataset 参数（问题 2） | 需要配置文件指定参数 |
-| 实验管理（问题 9） | 需要配置文件 + PROJECT_ROOT |
-| 单元测试（问题 6） | 应在代码稳定后写 |
+**所有重构已完成。**
 
 ---
 
@@ -639,9 +583,69 @@ uv run pytest tests/ -v
 
 **测试结果：** 44 passed, 3 skipped (Bicubic, CAMixer 兼容性)
 
-### ⏳ 第四阶段：增强功能（待开始）
+### ✅ 第四阶段：增强功能（已完成）
 
 | 步骤 | 状态 | 说明 |
 |------|------|------|
-| 7. 实验管理 | ⏳ 待开始 | 依赖配置文件 + PROJECT_ROOT |
-| 8. 日志系统 | ⏳ 待开始 | print → logging |
+| 7. 实验管理 | ✅ 完成 | src/utils/experiment.py |
+| 8. 日志系统 | ✅ 完成 | src/utils/logging.py |
+
+#### 7.1 实验管理
+
+**目标：** 每次实验生成独立目录，配置与 checkpoint 关联
+
+**实现：**
+
+```
+experiments/
+├── 20240315_143052_EDSR_wind_x2/
+│   ├── config.yaml        # 配置副本
+│   ├── train.log          # 训练日志
+│   ├── train_log.json     # 指标记录
+│   └── checkpoints/
+│       ├── epoch_10.pth
+│       ├── epoch_20.pth
+│       └── best.pth
+```
+
+**使用方式：**
+
+```python
+from src.utils import create_experiment
+
+experiment = create_experiment(config, base_dir="experiments")
+print(experiment.exp_dir)  # 实验目录
+print(experiment.get_wandb_name())  # 用于 wandb.init(name=...)
+```
+
+#### 7.2 日志系统
+
+**目标：** 替代 print，支持级别控制和文件输出
+
+**实现：**
+
+```python
+from src.utils import get_logger, info, warning
+
+logger = get_logger()
+logger.info("训练开始")
+
+# 或使用便捷函数
+info("训练完成")
+warning("学习率下降")
+```
+
+#### 7.3 训练脚本更新
+
+`scripts/train.py` 已集成实验管理和日志：
+
+```python
+# 创建实验
+experiment = create_experiment(train_cfg)
+
+# 初始化日志
+init_logger(log_file=experiment.exp_dir / "train.log")
+
+# wandb 使用实验名
+wandb.init(name=experiment.get_wandb_name())
+```
