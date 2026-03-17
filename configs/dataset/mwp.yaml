@@ -1,0 +1,8 @@
+# MWP 数据集配置
+param: mwp
+upscale: 2
+lr_patch_size: 30
+channels: 1
+normalize:
+  mean: [3.816070]
+  std: [3.3274]

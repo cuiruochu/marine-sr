@@ -1,0 +1,8 @@
+# ATD 模型配置
+name: ATD
+params:
+  embed_dim: 48
+  patch_size: 1
+  window_size: 16
+  depths: [6, 6, 6, 6]
+  num_heads: [4, 4, 4, 4]

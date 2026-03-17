@@ -1,0 +1,6 @@
+# RDN 模型配置
+name: RDN
+params:
+  n_features: 64
+  n_blocks: 6
+  layers: 4

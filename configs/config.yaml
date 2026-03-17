@@ -1,0 +1,28 @@
+# Hydra 主配置
+# 用法: uv run python src/cli.py model=edsr dataset=wind train.epochs=100
+
+defaults:
+  - model: edsr
+  - dataset: wind
+  - train: default
+  - _self_
+
+# 实验设置
+seed: 0
+
+# 路径
+paths:
+  checkpoint_dir: ./checkpoints
+  experiment_dir: ./experiments
+
+# WandB 配置
+wandb:
+  project: Marine-Parameters-SupervisedSR
+  mode: offline  # offline | online | disabled
+
+# Hydra 运行配置
+hydra:
+  run:
+    dir: ${paths.experiment_dir}/${now:%Y%m%d_%H%M%S}_${model.name}_${dataset.param}_x${dataset.upscale}
+  job:
+    chdir: false

@@ -1,0 +1,8 @@
+# Wind 数据集配置
+param: wind
+upscale: 2
+lr_patch_size: 30
+channels: 1
+normalize:
+  mean: [4.565732]
+  std: [3.1361]

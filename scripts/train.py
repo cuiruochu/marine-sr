@@ -1,7 +1,7 @@
 """
 训练入口脚本
 
-使用 YAML 配置文件驱动训练，支持实验管理和日志记录。
+使用 Engine + Callback 模式驱动训练。
 """
 
 import os
@@ -38,7 +38,7 @@ def main():
     os.environ["WANDB_MODE"] = "offline"
     wandb_log = wandb.init(
         project="Marine-Parameters-SupervisedSR",
-        name=experiment.get_wandb_name(),  # 与实验目录名一致
+        name=experiment.get_wandb_name(),
         config=train_cfg.raw
     )
 
@@ -51,26 +51,38 @@ def main():
     model = create_model(train_cfg)
     logger.info(f"模型名: {model['model_name']}")
 
+    # 打印模型信息
+    if model['model']:
+        total_params = sum(p.numel() for p in model['model'].parameters() if p.requires_grad)
+        logger.info(f"可训练参数: {total_params:,}")
+
     # 训练器
     trainer = get_trainer(
         train_cfg=train_cfg,
         model_dict=model,
+        lr=train_cfg.lr,
+        epoches=train_cfg.epochs,
         train_loader=train_loader,
+        val_cfg=train_cfg,  # 使用 train_cfg 作为验证配置
         val_loader=val_loader,
         wandb_log=wandb_log
     )
 
     # 加载预训练权重
-    if train_cfg.checkpoint:
+    if hasattr(train_cfg, 'checkpoint') and train_cfg.checkpoint:
         logger.info(f"加载预训练权重: {train_cfg.checkpoint}")
-        trainer.load_weight(train_cfg.checkpoint)
-
-    # 打印模型信息
-    trainer.print_model_info()
+        trainer.load_checkpoint(train_cfg.checkpoint)
 
     # 开始训练
     logger.info("开始训练...")
-    trainer.fit()
+    trainer.fit(
+        train_loader=train_loader,
+        val_loader=val_loader,
+        epochs=train_cfg.epochs,
+        mean=train_cfg.mean,
+        std=train_cfg.std,
+        mask=None,  # 可从 train_cfg.eval_mask 加载
+    )
 
     wandb.finish()
     logger.info("训练完成")
