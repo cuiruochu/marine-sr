@@ -226,6 +226,7 @@ class TestDataBuilders:
         batch = next(iter(loader))
         assert batch[0].shape == (2, 1, 30, 30)
         assert batch[1].shape == (2, 1, 60, 60)
+        assert loader.persistent_workers is False
 
     def test_build_eval_dataloader(self, train_spec):
         TrainSpec, _, _ = train_spec
@@ -234,6 +235,15 @@ class TestDataBuilders:
         batch = next(iter(loader))
         assert batch[0].shape == (1, 1, 60, 60)
         assert batch[1].shape == (1, 1, 120, 120)
+        assert loader.persistent_workers is False
+
+    def test_dataloader_enables_persistent_workers_when_workers_positive(self, train_spec):
+        TrainSpec, _, _ = train_spec
+        dataset = build_train_dataset(TrainSpec)
+        loader = build_train_dataloader(dataset, batch_size=2, num_workers=1)
+
+        assert loader.num_workers == 1
+        assert loader.persistent_workers is True
 
     def test_build_test_loader(self, train_spec):
         _, EvalSpec, _ = train_spec
@@ -241,6 +251,7 @@ class TestDataBuilders:
         batch = next(iter(loader))
         assert batch[0].shape == (1, 1, 60, 60)
         assert batch[1].shape == (1, 1, 120, 120)
+        assert loader.persistent_workers is False
 
     def test_build_inference_loader(self, train_spec):
         _, _, InferSpec = train_spec

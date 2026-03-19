@@ -5,14 +5,20 @@
     uv run python scripts/run_queue.py --queue jobs/queue.txt
     uv run python scripts/run_queue.py --queue jobs/queue.txt --dry-run
     uv run python scripts/run_queue.py --queue jobs/queue.txt --start-from 3
+
+队列命令格式:
+    1. 推荐: 每行一个 JSON 字符串数组，例如
+       ["uv", "run", "python", "scripts/train.py", "models=edsr"]
+    2. 兼容: 每行一个 shell-like 命令字符串，按 POSIX quoting 解析
+       uv run python scripts/train.py models=edsr "dataset.name='wind'"
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
+import shlex
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -20,14 +26,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
-
 PLACEHOLDER_PATTERN = re.compile(r"<[A-Z0-9_]+>")
+SHELL_OPERATOR_TOKENS = {"|", "||", "&", "&&", ";", "<", ">"}
 
 
 @dataclass
 class QueueJob:
     index: int
     command: str
+    argv: list[str]
 
 
 @dataclass
@@ -71,16 +78,49 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def parse_job_argv(command: str) -> list[str]:
+    stripped = command.strip()
+    if not stripped:
+        raise ValueError("空命令")
+
+    if stripped.startswith("["):
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"JSON 命令格式错误: {exc.msg}") from exc
+
+        if not isinstance(parsed, list) or not parsed or not all(isinstance(item, str) for item in parsed):
+            raise ValueError("JSON 命令必须是非空字符串数组")
+        argv = parsed
+    else:
+        try:
+            argv = shlex.split(stripped, posix=True)
+        except ValueError as exc:
+            raise ValueError(f"命令解析失败: {exc}") from exc
+
+    shell_tokens = [token for token in argv if token in SHELL_OPERATOR_TOKENS]
+    if shell_tokens:
+        joined = ", ".join(shell_tokens)
+        raise ValueError(f"队列命令不支持 shell 操作符: {joined}")
+
+    return argv
+
+
 def load_jobs(queue_path: Path) -> list[QueueJob]:
     if not queue_path.exists():
         raise FileNotFoundError(f"队列文件不存在: {queue_path}")
 
     jobs: list[QueueJob] = []
-    for raw_line in queue_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
+    for line_no, raw_line in enumerate(queue_path.read_text(encoding="utf-8-sig").splitlines(), start=1):
+        line = raw_line.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
-        jobs.append(QueueJob(index=len(jobs) + 1, command=line))
+        try:
+            argv = parse_job_argv(line)
+        except ValueError as exc:
+            raise ValueError(f"{queue_path}:{line_no} {exc}") from exc
+
+        jobs.append(QueueJob(index=len(jobs) + 1, command=line, argv=argv))
     return jobs
 
 
@@ -95,14 +135,15 @@ def has_unresolved_placeholder(command: str) -> list[str]:
     return PLACEHOLDER_PATTERN.findall(command)
 
 
-def stream_process(command: str, log_path: Path) -> int:
+def stream_process(job: QueueJob, log_path: Path) -> int:
     with log_path.open("w", encoding="utf-8", newline="") as log_file:
-        log_file.write(f"$ {command}\n\n")
+        log_file.write(f"$ {job.command}\n")
+        log_file.write(f"# argv: {json.dumps(job.argv, ensure_ascii=False)}\n\n")
         log_file.flush()
 
         process = subprocess.Popen(
-            command,
-            shell=True,
+            job.argv,
+            shell=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -111,9 +152,14 @@ def stream_process(command: str, log_path: Path) -> int:
         )
 
         assert process.stdout is not None
-        for line in process.stdout:
-            sys.stdout.write(line)
-            log_file.write(line)
+        try:
+            for line in process.stdout:
+                sys.stdout.write(line)
+                log_file.write(line)
+        except KeyboardInterrupt:
+            process.terminate()
+            process.wait()
+            raise
 
         return process.wait()
 
@@ -170,7 +216,7 @@ def execute_jobs(
         log_path = logs_dir / f"job_{job.index:03d}.log"
         started = datetime.now()
         print(f"[START] job_{job.index:03d}: {job.command}")
-        return_code = stream_process(job.command, log_path)
+        return_code = stream_process(job, log_path)
         finished = datetime.now()
         duration = (finished - started).total_seconds()
 
@@ -214,37 +260,41 @@ def build_summary(results: list[QueueResult], queue_path: Path, dry_run: bool) -
 
 
 def main() -> int:
-    args = parse_args()
-    jobs = load_jobs(args.queue)
-    if not jobs:
-        print(f"队列文件中没有可执行任务: {args.queue}")
-        return 1
+    try:
+        args = parse_args()
+        jobs = load_jobs(args.queue)
+        if not jobs:
+            print(f"队列文件中没有可执行任务: {args.queue}")
+            return 1
 
-    selected_jobs = [job for job in jobs if job.index >= args.start_from]
-    if not selected_jobs:
-        print(f"--start-from={args.start_from} 超出任务数量 ({len(jobs)})")
-        return 1
+        selected_jobs = [job for job in jobs if job.index >= args.start_from]
+        if not selected_jobs:
+            print(f"--start-from={args.start_from} 超出任务数量 ({len(jobs)})")
+            return 1
 
-    run_dir, logs_dir = ensure_run_dirs(args.output_dir)
-    summary_path = run_dir / "summary.json"
+        run_dir, logs_dir = ensure_run_dirs(args.output_dir)
+        summary_path = run_dir / "summary.json"
 
-    print(f"[QUEUE] queue={args.queue}")
-    print(f"[QUEUE] run_dir={run_dir}")
-    print(f"[QUEUE] jobs={len(selected_jobs)} / total={len(jobs)}")
+        print(f"[QUEUE] queue={args.queue}")
+        print(f"[QUEUE] run_dir={run_dir}")
+        print(f"[QUEUE] jobs={len(selected_jobs)} / total={len(jobs)}")
 
-    results = execute_jobs(
-        jobs=selected_jobs,
-        logs_dir=logs_dir,
-        dry_run=args.dry_run,
-        fail_fast=args.fail_fast,
-    )
+        results = execute_jobs(
+            jobs=selected_jobs,
+            logs_dir=logs_dir,
+            dry_run=args.dry_run,
+            fail_fast=args.fail_fast,
+        )
 
-    summary = build_summary(results, args.queue, args.dry_run)
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[SUMMARY] {summary_path}")
+        summary = build_summary(results, args.queue, args.dry_run)
+        summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[SUMMARY] {summary_path}")
 
-    any_failed = any(result.status == "failed" for result in results)
-    return 1 if any_failed and args.fail_fast else 0
+        any_failed = any(result.status == "failed" for result in results)
+        return 1 if any_failed and args.fail_fast else 0
+    except KeyboardInterrupt:
+        print("\n[INTERRUPTED] queue execution cancelled by user.")
+        return 130
 
 
 if __name__ == "__main__":

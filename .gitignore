@@ -25,3 +25,6 @@ data/
 # Logs
 *.log
 wandb/
+
+# Lock files
+uv.lock

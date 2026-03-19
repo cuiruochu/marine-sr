@@ -115,6 +115,27 @@ uv run python scripts/run_queue.py --queue jobs/queue.txt --dry-run
 uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/Train/wind --lr-output-dir ./data/wind/Train/LR/wind --scale 2
 ```
 
+对于 `mwd` 数据集，建议先进行 `cos/sin` 双通道编码，再做下采样预处理。原因是 `mwd` 表示角度，训练时若使用 `MSE` 一类逐点重建损失，直接回归角度值会把 `0°` 和 `360°` 误当成相距很远的数值。推荐流程是：
+
+```bash
+uv run python scripts/encode_mwd_cos_sin.py --input-dir ./raw_mwd_hr --output-dir ./encoded_mwd_hr
+uv run python scripts/preprocess_dataset.py --hr-input-dir ./encoded_mwd_hr --hr-output-dir ./data/mwd/Train/mwd --lr-output-dir ./data/mwd/Train/LR/mwd --scale 2
+```
+
+`scripts/encode_mwd_cos_sin.py` 会：
+
+- 读取目录下全部 `mwd` `.npy`
+- 若样本中包含 `None`，先补成 `0`
+- 统一转成 `float32`
+- 按角度值输出 `2×H×W` 的 `cos/sin` 双通道编码
+- 保留原文件名保存到输出目录
+
+如果你会对多个数据集分别做预处理，建议显式指定统计文件路径，避免默认的 `stats.json` 被后一次运行覆盖，例如：
+
+```bash
+uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/Train/wind --lr-output-dir ./data/wind/Train/LR/wind --scale 2 --stats-path ./data/wind/Train/stats_wind_x2.json
+```
+
 这个脚本会：
 
 - 读取输入目录下全部 `.npy`
@@ -122,7 +143,7 @@ uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-
 - 若尺寸不能被 `scale` 整除，则裁掉右侧和下侧多余像素
 - 使用 torchvision 的 bicubic 插值生成 LR
 - 按全体处理后 HR 样本统计 `mean/std`
-- 输出 `stats.json`
+- 输出 `stats.json`（或通过 `--stats-path` 指定的文件）
 
 约束：
 

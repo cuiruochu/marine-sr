@@ -16,13 +16,13 @@ dataset:
   train_hr_root: ./data/wind/Train/wind
   val_lr_root: ./data/wind/Val/LR/wind
   val_hr_root: ./data/wind/Val/wind
-  max_sample: false # false=全量；正整数=只取前 N 个验证样本
+  max_sample: 20 # false=全量；正整数=只取前 N 个验证样本
 
 train:
   epochs: 200
   batch_size: 16
-  num_workers: 8
-  val_num_workers: 4
+  num_workers: 6
+  val_num_workers: 2
   lr: 2e-4
   optimizer:
     name: adamw
@@ -39,7 +39,7 @@ train:
     name: l1
     params: {}
   checkpoint:
-    every: 10
+    every: 20
     save_best: true
     monitor: val_mae
     mode: min

@@ -11,8 +11,6 @@ dependencies = [
     "pyyaml",
     "scipy",
     "einops",
-    "timm",
-    "fairscale",
     "pytest",
     "ruff",
     "hydra-core>=1.3",
@@ -23,10 +21,14 @@ dependencies = [
 cpu = [
     "torch>=2.0",
     "torchvision",
+    "timm",
+    "fairscale",
 ]
 cu128 = [
     "torch>=2.0",
     "torchvision",
+    "timm",
+    "fairscale",
 ]
 
 [tool.uv.sources]
