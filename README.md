@@ -220,7 +220,7 @@ dataset:
   train_hr_root: ./data/wind/Train/wind
   val_lr_root: ./data/wind/Val/LR/wind
   val_hr_root: ./data/wind/Val/wind
-  max_sample: false
+  max_sample: false # false=全量；正整数=只取前 N 个验证样本
 
 train:
   epochs: 200
@@ -257,6 +257,8 @@ uv run python scripts/train.py dataset.train_lr_root=./data/... dataset.train_hr
 
 ### 分布式训练
 
+当前仅支持 PyTorch DDP，使用 `torchrun` 启动。
+
 ```bash
 torchrun --nproc_per_node=4 scripts/train.py
 ```
@@ -281,7 +283,7 @@ dataset:
     std: [3.1361]
   eval_lr_root: ./data/wind/Test/LR/wind
   eval_hr_root: ./data/wind/Test/wind
-  max_sample: false
+  max_sample: false # false=全量；正整数=只取前 N 个评估样本
 
 evaluate:
   checkpoint: ./checkpoints/.../best.pth
