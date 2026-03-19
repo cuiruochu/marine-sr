@@ -92,14 +92,44 @@ uv run python scripts/run_queue.py --queue jobs/queue.txt
 
 先修改：
 
-- `jobs/queue.txt` 中的 `LR/HR` 路径占位符
-- `jobs/queue.txt` 中的 checkpoint 占位符
+- `jobs/queue.txt` 中各数据集的 `mean/std` 占位符
+- `jobs/queue.txt` 中各数据集的 `Train/Val` 的 `LR/HR` 路径占位符
+
+当前 `jobs/queue.txt` 是训练队列模板，覆盖：
+
+- 全部内置模型
+- `wind` / `mwd` / `mwp` / `swh` 四个数据集
+- 其中 `mwd` 按 2 通道处理，其余数据集按 1 通道处理
 
 只检查任务而不真正执行：
 
 ```bash
 uv run python scripts/run_queue.py --queue jobs/queue.txt --dry-run
 ```
+
+### 5. 数据预处理
+
+如果你手头只有原始 HR `.npy` 目录，可以先用预处理脚本统一生成训练用的 `HR/LR` 配对数据：
+
+```bash
+uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/Train/wind --lr-output-dir ./data/wind/Train/LR/wind --scale 2
+```
+
+这个脚本会：
+
+- 读取输入目录下全部 `.npy`
+- 统一保存为 `float32` 的 `C×H×W`
+- 若尺寸不能被 `scale` 整除，则裁掉右侧和下侧多余像素
+- 使用 torchvision 的 bicubic 插值生成 LR
+- 按全体处理后 HR 样本统计 `mean/std`
+- 输出 `stats.json`
+
+约束：
+
+- 原始 HR 输入目录、处理后 HR 输出目录、LR 输出目录必须互不相同
+- 原图中若包含 `None`，默认填成 `0`
+- 单通道输入可以是 `H×W`
+- 多通道输入可以是 `C×H×W`
 
 ## 项目结构
 
@@ -124,7 +154,9 @@ configs/
 scripts/
 ├── train.py
 ├── evaluate.py
-└── infer.py
+├── infer.py
+├── run_queue.py
+└── preprocess_dataset.py
 ```
 
 ## 配置设计
@@ -406,6 +438,7 @@ data/
 - `wind`、`sst` 等单参数任务当前按 1 通道处理
 - 单通道数据可以直接存为 `HxW`
 - 多通道数据可以直接存为 `CxHxW`，并提供匹配通道数的 `mean/std`
+- 使用 `scripts/preprocess_dataset.py` 预处理后，导出的 HR/LR 会统一保存为 `C×H×W`
 
 ## 输出目录说明
 
