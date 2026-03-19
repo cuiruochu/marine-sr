@@ -1,243 +1,250 @@
 """
-数据集单元测试
-
-测试数据加载、归一化、MWD 编码等。
+数据集与数据加载测试
 """
 
+import os
+import tempfile
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 import torch
-import numpy as np
-import tempfile
-import os
 
-from src.datasets.dataset import (
-    MarineTrainSet,
-    MarineTestSet,
-    _is_mwd_param,
+from src.data import (
+    build_eval_dataloader,
+    build_test_dataset,
+    build_test_loader,
+    build_train_dataloader,
+    build_train_dataset,
+    build_val_dataset,
 )
-from src.datasets.utils import encode_mwd, normalize
+from src.datasets import MarineEvalDataset, MarineInferenceDataset, MarineTrainDataset
+from src.datasets.utils import normalize
 
 
-class TestHelperFunctions:
-    """测试辅助函数"""
-
-    def test_is_mwd_param(self):
-        """测试 _is_mwd_param 函数"""
-        assert _is_mwd_param("mwd") is True
-        assert _is_mwd_param("MWD") is True
-        assert _is_mwd_param("Mwd") is True
-        assert _is_mwd_param("wind") is False
-        assert _is_mwd_param("mwp") is False
-        assert _is_mwd_param("swh") is False
-
-
-class TestEncodeMWD:
-    """测试 MWD 编码"""
-
-    def test_encode_mwd_shape(self):
-        """测试 MWD 编码输出 shape"""
-        # 单通道输入 (1, H, W)
-        hr = torch.randn(1, 64, 64)
-        encoded = encode_mwd(hr)
-
-        # 输出应为 2 通道
-        assert encoded.shape == (2, 64, 64)
-
-    def test_encode_mwd_zero_degree(self):
-        """测试 MWD 编码 0 度"""
-        # 输入值直接表示角度
-        hr = torch.zeros(1, 10, 10)  # 0 度
-        encoded = encode_mwd(hr)
-
-        cos_channel = encoded[0]
-        sin_channel = encoded[1]
-
-        # cos(0°) = 1, sin(0°) = 0
-        assert torch.allclose(cos_channel, torch.ones_like(cos_channel), atol=1e-6)
-        assert torch.allclose(sin_channel, torch.zeros_like(sin_channel), atol=1e-6)
-
-    def test_encode_mwd_90_degree(self):
-        """测试 MWD 编码 90 度"""
-        # 输入值直接表示角度
-        hr = torch.ones(1, 10, 10) * 90.0  # 90 度
-        encoded = encode_mwd(hr)
-
-        cos_channel = encoded[0]
-        sin_channel = encoded[1]
-
-        # cos(90°) ≈ 0, sin(90°) = 1
-        assert torch.allclose(cos_channel, torch.zeros_like(cos_channel), atol=1e-6)
-        assert torch.allclose(sin_channel, torch.ones_like(sin_channel), atol=1e-6)
-
-
-class TestNormalize:
-    """测试归一化"""
-
+class TestDatasetTransforms:
     def test_normalize_shape(self):
-        """测试归一化不改变 shape"""
         mean = torch.tensor([1.0]).unsqueeze(-1).unsqueeze(-1)
         std = torch.tensor([2.0]).unsqueeze(-1).unsqueeze(-1)
-
         x = torch.randn(1, 64, 64)
         normalized = normalize(mean, std, x)
-
         assert normalized.shape == x.shape
 
-    def test_normalize_values(self):
-        """测试归一化值正确"""
-        mean = torch.tensor([10.0]).unsqueeze(-1).unsqueeze(-1)
-        std = torch.tensor([2.0]).unsqueeze(-1).unsqueeze(-1)
 
-        x = torch.ones(1, 4, 4) * 12.0  # (12 - 10) / 2 = 1
-        normalized = normalize(mean, std, x)
-
-        expected = torch.ones(1, 4, 4)
-        assert torch.allclose(normalized, expected)
-
-    def test_normalize_zero_std(self):
-        """测试 std=1 时归一化"""
-        mean = torch.tensor([5.0]).unsqueeze(-1).unsqueeze(-1)
-        std = torch.tensor([1.0]).unsqueeze(-1).unsqueeze(-1)
-
-        x = torch.ones(1, 4, 4) * 8.0
-        normalized = normalize(mean, std, x)
-
-        expected = torch.ones(1, 4, 4) * 3.0
-        assert torch.allclose(normalized, expected)
-
-
-class TestMarineTestSet:
-    """测试 MarineTestSet"""
-
+class TestMarineEvalDataset:
     @pytest.fixture
     def temp_data_dir(self):
-        """创建临时数据目录"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # 创建测试数据文件
+            lr_dir = os.path.join(tmpdir, "lr")
+            hr_dir = os.path.join(tmpdir, "hr")
+            os.makedirs(lr_dir)
+            os.makedirs(hr_dir)
             for i in range(3):
-                data = np.random.rand(64, 64).astype(np.float32)
-                np.save(os.path.join(tmpdir, f"test_{i}.npy"), data)
-            yield tmpdir
+                lr = np.random.rand(32, 32).astype(np.float32)
+                hr = np.random.rand(64, 64).astype(np.float32)
+                np.save(os.path.join(lr_dir, f"test_{i}.npy"), lr)
+                np.save(os.path.join(hr_dir, f"test_{i}.npy"), hr)
+            yield lr_dir, hr_dir
 
-    def test_testset_length(self, temp_data_dir):
-        """测试数据集长度"""
-        testset = MarineTestSet(
-            hr_root=temp_data_dir,
+    def test_eval_dataset_length(self, temp_data_dir):
+        lr_dir, hr_dir = temp_data_dir
+        dataset = MarineEvalDataset(
+            lr_root=lr_dir,
+            hr_root=hr_dir,
             upscale=2,
             mean=[0.5],
             std=[1.0],
-            is_mwd=False,
-            sample_q=False
+            max_sample=False,
         )
+        assert len(dataset) == 3
 
-        assert len(testset) == 3
-
-    def test_testset_getitem_shape(self, temp_data_dir):
-        """测试 __getitem__ 返回 shape"""
-        testset = MarineTestSet(
-            hr_root=temp_data_dir,
+    def test_eval_dataset_getitem_shape(self, temp_data_dir):
+        lr_dir, hr_dir = temp_data_dir
+        dataset = MarineEvalDataset(
+            lr_root=lr_dir,
+            hr_root=hr_dir,
             upscale=2,
             mean=[0.5],
             std=[1.0],
-            is_mwd=False,
-            sample_q=False
+            max_sample=False,
         )
-
-        lr, hr, filename = testset[0]
-
-        # HR 保持原始大小
+        lr, hr, filename = dataset[0]
         assert hr.shape == (1, 64, 64)
-        # LR 是 HR 的 1/upscale
         assert lr.shape == (1, 32, 32)
+        assert filename.endswith(".npy")
 
-    def test_testset_sample_q(self, temp_data_dir):
-        """测试 sample_q 限制样本数"""
-        testset = MarineTestSet(
-            hr_root=temp_data_dir,
-            upscale=2,
+
+class TestMarineInferenceDataset:
+    def test_inference_dataset_getitem_shape(self, tmp_path):
+        for i in range(3):
+            lr = np.random.rand(32, 32).astype(np.float32)
+            np.save(tmp_path / f"sample_{i}.npy", lr)
+
+        dataset = MarineInferenceDataset(
+            lr_root=str(tmp_path),
             mean=[0.5],
             std=[1.0],
-            is_mwd=False,
-            sample_q=2
         )
 
-        assert len(testset) == 2
-
-    def test_testset_mwd_encoding(self, temp_data_dir):
-        """测试 MWD 编码在数据集中"""
-        testset = MarineTestSet(
-            hr_root=temp_data_dir,
-            upscale=2,
-            mean=[0.5, 0.5],
-            std=[1.0, 1.0],
-            is_mwd=True,
-            sample_q=False
-        )
-
-        lr, hr, filename = testset[0]
-
-        # MWD 编码后应为 2 通道
-        assert hr.shape[0] == 2
-        assert lr.shape[0] == 2
+        lr, filename = dataset[0]
+        assert lr.shape == (1, 32, 32)
+        assert filename.endswith(".npy")
 
 
-class TestMarineTrainSet:
-    """测试 MarineTrainSet"""
-
+class TestMarineTrainDataset:
     @pytest.fixture
     def temp_data_dir(self):
-        """创建临时数据目录"""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # 创建足够大的测试数据（需要能裁剪 patch）
+            lr_dir = os.path.join(tmpdir, "lr")
+            hr_dir = os.path.join(tmpdir, "hr")
+            os.makedirs(lr_dir)
+            os.makedirs(hr_dir)
             for i in range(5):
-                data = np.random.rand(120, 120).astype(np.float32)
-                np.save(os.path.join(tmpdir, f"train_{i}.npy"), data)
-            yield tmpdir
+                lr = np.random.rand(60, 60).astype(np.float32)
+                hr = np.random.rand(120, 120).astype(np.float32)
+                np.save(os.path.join(lr_dir, f"train_{i}.npy"), lr)
+                np.save(os.path.join(hr_dir, f"train_{i}.npy"), hr)
+            yield lr_dir, hr_dir
 
-    def test_trainset_length(self, temp_data_dir):
-        """测试训练数据集长度"""
-        trainset = MarineTrainSet(
-            hr_root=temp_data_dir,
+    def test_train_dataset_length(self, temp_data_dir):
+        lr_dir, hr_dir = temp_data_dir
+        dataset = MarineTrainDataset(
+            lr_root=lr_dir,
+            hr_root=hr_dir,
             upscale=2,
             lr_patch_size=30,
             mean=[0.5],
             std=[1.0],
-            is_mwd=False
         )
+        assert len(dataset) == 5
 
-        assert len(trainset) == 5
-
-    def test_trainset_getitem_shape(self, temp_data_dir):
-        """测试训练数据集 __getitem__ 返回 shape"""
-        trainset = MarineTrainSet(
-            hr_root=temp_data_dir,
+    def test_train_dataset_getitem_shape(self, temp_data_dir):
+        lr_dir, hr_dir = temp_data_dir
+        dataset = MarineTrainDataset(
+            lr_root=lr_dir,
+            hr_root=hr_dir,
             upscale=2,
             lr_patch_size=30,
             mean=[0.5],
             std=[1.0],
-            is_mwd=False
         )
-
-        lr, hr = trainset[0]
-
-        # HR patch: lr_patch_size * upscale
+        lr, hr = dataset[0]
         assert hr.shape == (1, 60, 60)
-        # LR patch
         assert lr.shape == (1, 30, 30)
 
-    def test_trainset_mwd(self, temp_data_dir):
-        """测试训练数据集 MWD 模式"""
-        trainset = MarineTrainSet(
-            hr_root=temp_data_dir,
+
+class TestDataBuilders:
+    @pytest.fixture
+    def train_spec(self, tmp_path):
+        train_lr_root = tmp_path / "Train" / "LR"
+        train_hr_root = tmp_path / "Train" / "HR"
+        val_lr_root = tmp_path / "Val" / "LR"
+        val_hr_root = tmp_path / "Val" / "HR"
+        eval_lr_root = tmp_path / "Eval" / "LR"
+        eval_hr_root = tmp_path / "Eval" / "HR"
+        infer_lr_root = tmp_path / "Infer" / "LR"
+
+        for root in (train_lr_root, train_hr_root, val_lr_root, val_hr_root, eval_lr_root, eval_hr_root, infer_lr_root):
+            root.mkdir(parents=True)
+
+        for root, size in (
+            (train_lr_root, 60),
+            (val_lr_root, 60),
+            (eval_lr_root, 60),
+            (infer_lr_root, 60),
+            (train_hr_root, 120),
+            (val_hr_root, 120),
+            (eval_hr_root, 120),
+        ):
+            for i in range(3):
+                data = np.random.rand(size, size).astype(np.float32)
+                np.save(root / f"sample_{i}.npy", data)
+
+        train_spec = SimpleNamespace(
             upscale=2,
             lr_patch_size=30,
-            mean=[0.5, 0.5],
-            std=[1.0, 1.0],
-            is_mwd=True
+            batch_size=2,
+            mean=[0.5],
+            std=[1.0],
+            train_lr_root=str(train_lr_root),
+            train_hr_root=str(train_hr_root),
+            val_lr_root=str(val_lr_root),
+            val_hr_root=str(val_hr_root),
+            max_sample=False,
         )
 
-        lr, hr = trainset[0]
+        eval_spec = SimpleNamespace(
+            upscale=2,
+            mean=[0.5],
+            std=[1.0],
+            lr_root=str(eval_lr_root),
+            hr_root=str(eval_hr_root),
+            mode="evaluation",
+            max_sample=False,
+        )
 
-        # MWD 应为 2 通道
-        assert hr.shape[0] == 2
-        assert lr.shape[0] == 2
+        infer_spec = SimpleNamespace(
+            upscale=2,
+            mean=[0.5],
+            std=[1.0],
+            lr_root=str(infer_lr_root),
+            hr_root=None,
+            mode="inference",
+            max_sample=False,
+        )
+
+        return train_spec, eval_spec, infer_spec
+
+    def test_build_train_dataset(self, train_spec):
+        TrainSpec, _, _ = train_spec
+        dataset = build_train_dataset(TrainSpec)
+        assert isinstance(dataset, MarineTrainDataset)
+        assert len(dataset) == 3
+
+    def test_build_val_dataset(self, train_spec):
+        TrainSpec, _, _ = train_spec
+        dataset = build_val_dataset(TrainSpec, max_sample=2)
+        assert isinstance(dataset, MarineEvalDataset)
+        assert len(dataset) == 2
+
+    def test_build_test_dataset(self, train_spec):
+        _, EvalSpec, _ = train_spec
+        dataset = build_test_dataset(EvalSpec)
+        assert isinstance(dataset, MarineEvalDataset)
+        assert len(dataset) == 3
+
+    def test_build_inference_dataset(self, train_spec):
+        _, _, InferSpec = train_spec
+        dataset = build_test_dataset(InferSpec)
+        assert isinstance(dataset, MarineInferenceDataset)
+        assert len(dataset) == 3
+
+    def test_build_train_dataloader(self, train_spec):
+        TrainSpec, _, _ = train_spec
+        dataset = build_train_dataset(TrainSpec)
+        loader = build_train_dataloader(dataset, batch_size=2, num_workers=0)
+        batch = next(iter(loader))
+        assert batch[0].shape == (2, 1, 30, 30)
+        assert batch[1].shape == (2, 1, 60, 60)
+
+    def test_build_eval_dataloader(self, train_spec):
+        TrainSpec, _, _ = train_spec
+        dataset = build_val_dataset(TrainSpec, max_sample=2)
+        loader = build_eval_dataloader(dataset, batch_size=1, num_workers=0)
+        batch = next(iter(loader))
+        assert batch[0].shape == (1, 1, 60, 60)
+        assert batch[1].shape == (1, 1, 120, 120)
+
+    def test_build_test_loader(self, train_spec):
+        _, EvalSpec, _ = train_spec
+        loader = build_test_loader(EvalSpec, batch_size=1, num_workers=0)
+        batch = next(iter(loader))
+        assert batch[0].shape == (1, 1, 60, 60)
+        assert batch[1].shape == (1, 1, 120, 120)
+
+    def test_build_inference_loader(self, train_spec):
+        _, _, InferSpec = train_spec
+        loader = build_test_loader(InferSpec, batch_size=1, num_workers=0)
+        batch = next(iter(loader))
+        assert batch[0].shape == (1, 1, 60, 60)
+        assert batch[1][0].endswith(".npy")

@@ -84,6 +84,8 @@ def apply_mask(
     res = []
     for img in imgs:
         if mask is not None:
+            if mask.shape != img.shape:
+                mask = _expand_mask(mask, img)
             img = img * mask
         res.append(img)
     return res[0] if len(res) == 1 else tuple(res)
@@ -107,6 +109,7 @@ def calculate_mae(
     """
     loss_map = torch.abs(img - img_hat)
     if mask is not None:
+        mask = _expand_mask(mask, loss_map)
         loss_map = loss_map[mask]
     return loss_map.mean().item()
 
@@ -129,6 +132,7 @@ def calculate_max_mae(
     """
     loss_map = torch.abs(img - img_hat)
     if mask is not None:
+        mask = _expand_mask(mask, loss_map)
         loss_map = loss_map[mask]
     return loss_map.max().item()
 
@@ -153,6 +157,7 @@ def calculate_psnr(
     """
     loss_map = (img - img_hat) ** 2
     if mask is not None:
+        mask = _expand_mask(mask, loss_map)
         loss_map = loss_map[mask]
     mse = loss_map.mean()
     psnr = 10. * torch.log10(1. / (mse + 1e-8))
@@ -179,6 +184,8 @@ def calculate_ssim(
     """
     if mask is None:
         mask = torch.ones_like(img)
+    else:
+        mask = _expand_mask(mask, img)
 
     # 转换数据类型
     img = img.to(torch.float64)
@@ -229,3 +236,15 @@ def calculate_ssim(
     ssim_per_image[sum_W_sum == 0] = 0
 
     return ssim_per_image.mean().item()
+
+
+def _expand_mask(mask: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
+    if mask.shape == reference.shape:
+        return mask
+    if mask.ndim != reference.ndim:
+        raise ValueError(f"mask 维度与参考张量不一致: mask={mask.shape}, ref={reference.shape}")
+    if mask.size(0) != reference.size(0):
+        raise ValueError(f"mask batch 维度与参考张量不一致: mask={mask.shape}, ref={reference.shape}")
+    if mask.size(1) == 1 and reference.size(1) > 1:
+        return mask.expand(-1, reference.size(1), -1, -1)
+    raise ValueError(f"mask 形状无法广播到参考张量: mask={mask.shape}, ref={reference.shape}")

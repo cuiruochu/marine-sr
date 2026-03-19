@@ -1,5 +1,5 @@
-import torch
 import random
+import torch
 import torchvision.transforms as transforms
 
 
@@ -34,21 +34,6 @@ def patchify(img, patch_size, return_coords=False):
         return img_cropped, x0, y0
     else:
         return img_cropped
-
-
-def encode_mwd(*imgs):
-    """
-    :param img: each shape:(1, H, W)
-    :return: each shape:(2, H, W)
-    """
-    res = []
-    for img in imgs:
-        img = torch.clip(img, min=0, max=360)
-        img = torch.deg2rad(img)
-        cos_img, sin_img = torch.cos(img), torch.sin(img)
-        img = torch.cat([cos_img, sin_img], dim=0)
-        res.append(img)
-    return res[0] if len(res) == 1 else tuple(res)
 
 
 def augement(*imgs):

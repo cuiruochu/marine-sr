@@ -1,8 +1,0 @@
-# SWH 数据集配置
-param: swh
-upscale: 2
-lr_patch_size: 30
-channels: 1
-normalize:
-  mean: [0.812000]
-  std: [0.9408]

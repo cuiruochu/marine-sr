@@ -15,8 +15,8 @@
     scheduler = get_scheduler("cosine", optimizer, T_max=200)
 
     # 列出可用选项
-    print(list_optimizers())
-    print(list_schedulers())
+    logger.info(list_optimizers())
+    logger.info(list_schedulers())
 """
 
 from .optimizer import (

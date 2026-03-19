@@ -1,0 +1,95 @@
+# 训练实验队列模板
+# 规则：
+# 1. 每行一条完整命令
+# 2. 以 # 开头的行为注释
+# 3. 运行前请先替换每个数据集对应的均值、标准差和路径占位符
+# 4. 除了模型、数据集名、通道数、mean/std、Train/Val 路径外，其余参数全部走 configs/train.yaml 默认值
+#
+# 数据集占位符约定：
+# - wind / mwp / swh: 单通道，mean/std 各 1 个值
+# - mwd: 双通道，mean/std 各 2 个值
+#
+# wind:
+#   <WIND_MEAN> <WIND_STD>
+#   <WIND_TRAIN_LR_ROOT> <WIND_TRAIN_HR_ROOT> <WIND_VAL_LR_ROOT> <WIND_VAL_HR_ROOT>
+# mwp:
+#   <MWP_MEAN> <MWP_STD>
+#   <MWP_TRAIN_LR_ROOT> <MWP_TRAIN_HR_ROOT> <MWP_VAL_LR_ROOT> <MWP_VAL_HR_ROOT>
+# swh:
+#   <SWH_MEAN> <SWH_STD>
+#   <SWH_TRAIN_LR_ROOT> <SWH_TRAIN_HR_ROOT> <SWH_VAL_LR_ROOT> <SWH_VAL_HR_ROOT>
+# mwd:
+#   <MWD_MEAN_0> <MWD_MEAN_1> <MWD_STD_0> <MWD_STD_1>
+#   <MWD_TRAIN_LR_ROOT> <MWD_TRAIN_HR_ROOT> <MWD_VAL_LR_ROOT> <MWD_VAL_HR_ROOT>
+
+# ====================
+# EDSR
+# ====================
+uv run python scripts/train.py models=edsr dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=edsr dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=edsr dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=edsr dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# RCAN
+# ====================
+uv run python scripts/train.py models=rcan dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=rcan dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=rcan dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=rcan dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# RDN
+# ====================
+uv run python scripts/train.py models=rdn dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=rdn dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=rdn dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=rdn dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# SwinIR
+# ====================
+uv run python scripts/train.py models=swinir dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=swinir dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=swinir dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=swinir dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# MySR
+# ====================
+uv run python scripts/train.py models=mysr dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysr dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysr dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysr dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# MySRAb1
+# ====================
+uv run python scripts/train.py models=mysrab1 dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysrab1 dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysrab1 dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysrab1 dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# MySRAb2
+# ====================
+uv run python scripts/train.py models=mysrab2 dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysrab2 dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysrab2 dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=mysrab2 dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# ATD
+# ====================
+uv run python scripts/train.py models=atd dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=atd dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=atd dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=atd dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"
+
+# ====================
+# CAMixer
+# ====================
+uv run python scripts/train.py models=camixer dataset.name=wind dataset.channels=1 dataset.normalize.mean=[<WIND_MEAN>] dataset.normalize.std=[<WIND_STD>] dataset.train_lr_root="<WIND_TRAIN_LR_ROOT>" dataset.train_hr_root="<WIND_TRAIN_HR_ROOT>" dataset.val_lr_root="<WIND_VAL_LR_ROOT>" dataset.val_hr_root="<WIND_VAL_HR_ROOT>"
+uv run python scripts/train.py models=camixer dataset.name=mwp dataset.channels=1 dataset.normalize.mean=[<MWP_MEAN>] dataset.normalize.std=[<MWP_STD>] dataset.train_lr_root="<MWP_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWP_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWP_VAL_LR_ROOT>" dataset.val_hr_root="<MWP_VAL_HR_ROOT>"
+uv run python scripts/train.py models=camixer dataset.name=swh dataset.channels=1 dataset.normalize.mean=[<SWH_MEAN>] dataset.normalize.std=[<SWH_STD>] dataset.train_lr_root="<SWH_TRAIN_LR_ROOT>" dataset.train_hr_root="<SWH_TRAIN_HR_ROOT>" dataset.val_lr_root="<SWH_VAL_LR_ROOT>" dataset.val_hr_root="<SWH_VAL_HR_ROOT>"
+uv run python scripts/train.py models=camixer dataset.name=mwd dataset.channels=2 dataset.normalize.mean=[<MWD_MEAN_0>,<MWD_MEAN_1>] dataset.normalize.std=[<MWD_STD_0>,<MWD_STD_1>] dataset.train_lr_root="<MWD_TRAIN_LR_ROOT>" dataset.train_hr_root="<MWD_TRAIN_HR_ROOT>" dataset.val_lr_root="<MWD_VAL_LR_ROOT>" dataset.val_hr_root="<MWD_VAL_HR_ROOT>"

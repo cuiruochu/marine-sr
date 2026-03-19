@@ -1,8 +1,0 @@
-# MWD 数据集配置
-param: mwd
-upscale: 2
-lr_patch_size: 30
-channels: 2
-normalize:
-  mean: [0.501979, 0.223533]
-  std: [0.650492, 0.524320]

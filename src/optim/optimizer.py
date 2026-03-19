@@ -13,7 +13,7 @@
     optimizer = get_optimizer("adamw", model, lr=1e-4, weight_decay=0.01)
 
     # 列出所有可用优化器
-    print(list_optimizers())
+    logger.info(list_optimizers())
 """
 
 from typing import Dict, Callable, Any

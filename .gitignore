@@ -17,8 +17,7 @@ __pycache__/
 # Project specific
 checkpoints/
 experiments/
-*.pth
-*.pt
+queue_runs/
 
 # Data
 data/
@@ -26,6 +25,3 @@ data/
 # Logs
 *.log
 wandb/
-
-# UV
-uv.lock

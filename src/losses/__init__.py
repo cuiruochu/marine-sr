@@ -13,7 +13,7 @@
     loss_fn = get_loss("l2", reduction="sum")
 
     # 列出所有可用损失函数
-    print(list_losses())
+    logger.info(list_losses())
 """
 
 from .registry import LOSS_REGISTRY, register_loss, get_loss, list_losses

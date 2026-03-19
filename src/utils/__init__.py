@@ -9,6 +9,7 @@ from .logging import (
     warning,
     error,
 )
+from .random_state import capture_rng_state, restore_rng_state, seed_everything
 
 __all__ = [
     "PROJECT_ROOT",
@@ -22,4 +23,7 @@ __all__ = [
     "debug",
     "warning",
     "error",
+    "capture_rng_state",
+    "restore_rng_state",
+    "seed_everything",
 ]

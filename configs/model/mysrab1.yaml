@@ -1,5 +1,0 @@
-# MySRAb1 模型配置
-name: MySRAb1
-params:
-  num_features: 76
-  n_blocks: 5

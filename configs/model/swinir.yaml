@@ -1,8 +1,0 @@
-# SwinIR 模型配置
-name: SwinIR
-params:
-  embed_dim: 60
-  patch_size: 1
-  window_size: 8
-  depths: [6, 6, 6, 6]
-  num_heads: [6, 6, 6, 6]

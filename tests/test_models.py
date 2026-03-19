@@ -7,6 +7,9 @@
 import pytest
 import torch
 import sys
+from importlib.util import find_spec
+
+from src.core import normalize_model_output
 
 
 # 在导入模型前检查依赖
@@ -20,7 +23,8 @@ def _check_deps():
         deps["ATD"] = False
 
     try:
-        import basicsr
+        if find_spec("torchvision") is None:
+            raise ImportError
     except ImportError:
         deps["CAMixer"] = False
 
@@ -53,7 +57,7 @@ def _import_models():
         except ImportError:
             _DEPS["ATD"] = False
 
-    # 条件导入 CAMixer（basicsr 和 torchvision 可能有兼容性问题）
+    # 条件导入 CAMixer（torchvision 兼容性可能影响可用性）
     if _DEPS["CAMixer"]:
         try:
             from src.models import CAMixer  # noqa: F401
@@ -70,6 +74,9 @@ list_models, get_model_info, create_model_result, merge_params = _import_models(
 BATCH_SIZE = 2
 HEIGHT = 32
 WIDTH = 32
+BACKWARD_BATCH_SIZE = 1
+BACKWARD_HEIGHT = 16
+BACKWARD_WIDTH = 16
 
 
 def is_model_available(model_name: str) -> bool:
@@ -148,6 +155,45 @@ class TestModelForward:
         assert y.shape[1] == in_dim
         assert y.shape[2] == HEIGHT * upscale
         assert y.shape[3] == WIDTH * upscale
+
+
+class TestModelBackward:
+    """测试模型反向传播"""
+
+    @pytest.mark.parametrize("model_name", get_test_models())
+    @pytest.mark.parametrize("in_dim", [1, 2])
+    def test_model_backward(self, model_name, in_dim):
+        """测试模型可用假数据完成前向和反向传播"""
+        if model_name == "Bicubic":
+            pytest.skip("Bicubic has no trainable model")
+
+        info = get_model_info(model_name)
+        params = merge_params(info.default_params or {}, {})
+        upscale = 2
+
+        result = info.factory(params, in_dim, upscale)
+        model = result["model"]
+        model.train()
+
+        x = torch.randn(BACKWARD_BATCH_SIZE, in_dim, BACKWARD_HEIGHT, BACKWARD_WIDTH)
+        target = torch.randn(
+            BACKWARD_BATCH_SIZE,
+            in_dim,
+            BACKWARD_HEIGHT * upscale,
+            BACKWARD_WIDTH * upscale,
+        )
+
+        output = normalize_model_output(model(x))
+        y = output.pred
+        loss = torch.nn.functional.mse_loss(y, target)
+        if output.aux_losses:
+            loss = loss + sum(value for value in output.aux_losses.values())
+        loss.backward()
+
+        grads = [param.grad for param in model.parameters() if param.requires_grad]
+        assert grads, f"{model_name} 没有可训练参数"
+        assert any(grad is not None for grad in grads), f"{model_name} 反向传播后没有梯度"
+        assert all(grad is None or torch.isfinite(grad).all() for grad in grads), f"{model_name} 梯度包含非有限值"
 
     @pytest.mark.parametrize("model_name", get_test_models())
     def test_model_forward_in_dim_2(self, model_name):
@@ -245,7 +291,7 @@ class TestModelSkip:
 
     @pytest.mark.skipif(
         not is_model_available("CAMixer"),
-        reason="basicsr not installed"
+        reason="torchvision not installed"
     )
     def test_camixer_available(self):
         """CAMixer 模型可用时运行"""

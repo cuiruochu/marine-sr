@@ -1,10 +1,5 @@
-"""
-检查点回调
+"""检查点回调。"""
 
-实现模型保存功能。
-"""
-
-import shutil
 from pathlib import Path
 from typing import Optional, Literal
 from ..core.callbacks import Callback
@@ -73,15 +68,18 @@ class CheckpointCallback(Callback):
         # 定期保存
         if self.every > 0 and epoch % self.every == 0:
             path = self.save_dir / f"epoch_{epoch}.pth"
-            engine.save_checkpoint(str(path), epoch)
             self._saved_epochs.append(epoch)
+            old_path = None
 
             # 清理旧检查点
             if self.keep_last > 0 and len(self._saved_epochs) > self.keep_last:
                 old_epoch = self._saved_epochs.pop(0)
                 old_path = self.save_dir / f"epoch_{old_epoch}.pth"
-                if old_path.exists():
-                    old_path.unlink()
+
+            engine.save_checkpoint(str(path), epoch)
+
+            if old_path is not None and old_path.exists():
+                old_path.unlink()
 
         # 保存最佳模型
         if self.save_best and self.monitor in logs:
@@ -99,3 +97,15 @@ class CheckpointCallback(Callback):
         """训练结束时保存最终模型"""
         path = self.save_dir / "last.pth"
         engine.save_checkpoint(str(path), engine.current_epoch)
+
+    def state_dict(self) -> dict:
+        return {
+            "best_value": self.best_value,
+            "saved_epochs": list(self._saved_epochs),
+        }
+
+    def load_state_dict(self, state: dict) -> None:
+        if "best_value" in state:
+            self.best_value = state["best_value"]
+        if "saved_epochs" in state:
+            self._saved_epochs = list(state["saved_epochs"])

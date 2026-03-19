@@ -166,10 +166,12 @@ class TestSchedulerStep:
         assert initial_lr == 1e-3
 
         # 第一步
+        optimizer.step()
         scheduler.step()
         assert optimizer.param_groups[0]["lr"] == initial_lr  # 未到 step_size
 
         # 第二步
+        optimizer.step()
         scheduler.step()
         assert optimizer.param_groups[0]["lr"] == initial_lr * 0.1  # 到达 step_size
 
@@ -182,5 +184,6 @@ class TestSchedulerStep:
         initial_lr = optimizer.param_groups[0]["lr"]
 
         # 步进后学习率应下降
+        optimizer.step()
         scheduler.step()
         assert optimizer.param_groups[0]["lr"] < initial_lr

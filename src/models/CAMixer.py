@@ -1,6 +1,41 @@
+import sys
+
 from .common import math, torch, nn, F, np
 from einops import rearrange
-from basicsr.archs.arch_util import flow_warp
+
+try:
+    import torchvision.transforms.functional_tensor  # noqa: F401
+except ModuleNotFoundError:
+    import torchvision.transforms._functional_tensor as _functional_tensor
+
+    sys.modules["torchvision.transforms.functional_tensor"] = _functional_tensor
+
+def flow_warp(x, flow, interp_mode="bilinear", padding_mode="zeros", align_corners=True):
+    """Warp a feature map with a dense flow field."""
+    if x.size()[-2:] != flow.size()[1:3]:
+        raise ValueError(
+            f"flow spatial size must match input spatial size, got x={tuple(x.shape)} and flow={tuple(flow.shape)}"
+        )
+
+    _, _, h, w = x.size()
+    grid_y, grid_x = torch.meshgrid(
+        torch.arange(0, h, device=x.device, dtype=x.dtype),
+        torch.arange(0, w, device=x.device, dtype=x.dtype),
+        indexing="ij",
+    )
+    base_grid = torch.stack((grid_x, grid_y), dim=2)
+    vgrid = base_grid.unsqueeze(0) + flow
+
+    vgrid_x = 2.0 * vgrid[:, :, :, 0] / max(w - 1, 1) - 1.0
+    vgrid_y = 2.0 * vgrid[:, :, :, 1] / max(h - 1, 1) - 1.0
+    vgrid_scaled = torch.stack((vgrid_x, vgrid_y), dim=3)
+    return F.grid_sample(
+        x,
+        vgrid_scaled,
+        mode=interp_mode,
+        padding_mode=padding_mode,
+        align_corners=align_corners,
+    )
 
 
 class LayerNorm(nn.Module):
@@ -201,7 +236,11 @@ class CAMixer(nn.Module):
 
         if self.is_deformable:
             condition_wind = torch.stack(
-                torch.meshgrid(torch.linspace(-1, 1, self.window_size), torch.linspace(-1, 1, self.window_size))) \
+                torch.meshgrid(
+                    torch.linspace(-1, 1, self.window_size),
+                    torch.linspace(-1, 1, self.window_size),
+                    indexing="ij",
+                )) \
                 .type_as(x).unsqueeze(0).repeat(N, 1, H // self.window_size, W // self.window_size)
             if condition_global is None:
                 _condition = torch.cat([v, condition_wind], dim=1)

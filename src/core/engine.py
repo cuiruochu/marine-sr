@@ -24,6 +24,8 @@ from .metrics import (
     normalize_to_01,
     apply_mask,
 )
+from .model_output import normalize_model_output, sum_aux_losses
+from src.utils import capture_rng_state, restore_rng_state
 from src.utils.distributed import (
     is_distributed,
     get_rank,
@@ -71,6 +73,7 @@ class Engine:
         device: Optional[str] = None,
         callbacks: Optional[List[Callback]] = None,
         ddp: bool = False,
+        config_snapshot: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化训练引擎
@@ -101,6 +104,7 @@ class Engine:
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.scheduler = scheduler
+        self.config_snapshot = config_snapshot
 
         # 回调
         self.callbacks = CallbackList(callbacks or [])
@@ -137,14 +141,25 @@ class Engine:
 
         # 前向传播
         self.optimizer.zero_grad()
-        sr = self.model(lr)
-        loss = self.loss_fn(sr, hr)
+        output = normalize_model_output(self.model(lr))
+        sr = output.pred
+        recon_loss = self.loss_fn(sr, hr)
+        aux_loss = sum_aux_losses(output.aux_losses, recon_loss)
+        loss = recon_loss + aux_loss
 
         # 反向传播
         loss.backward()
         self.optimizer.step()
 
-        return {"loss": loss.item()}
+        logs = {
+            "loss": loss.item(),
+            "recon_loss": recon_loss.item(),
+        }
+        if output.aux_losses:
+            logs["aux_loss"] = aux_loss.item()
+            for name, value in output.aux_losses.items():
+                logs[f"aux_{name}"] = value.detach().item()
+        return logs
 
     @torch.no_grad()
     def evaluate(
@@ -183,7 +198,7 @@ class Engine:
 
         for batch in val_loader:
             lr, hr = batch[0].to(self.device), batch[1].to(self.device)
-            sr = self.model(lr)
+            sr = normalize_model_output(self.model(lr)).pred
 
             # 反归一化
             sr = reverse_norm(sr, mean_t, std_t)
@@ -348,10 +363,14 @@ class Engine:
             "best_epoch": self.best_epoch,
             "model": model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
+            "callbacks": self.callbacks.state_dict(),
+            "rng_state": capture_rng_state(),
         }
 
         if self.scheduler is not None:
             state["scheduler"] = self.scheduler.state_dict()
+        if self.config_snapshot is not None:
+            state["config"] = self.config_snapshot
 
         torch.save(state, path)
 
@@ -360,6 +379,7 @@ class Engine:
         path: str,
         load_optimizer: bool = True,
         load_scheduler: bool = True,
+        load_rng_state: bool = True,
     ) -> int:
         """
         加载检查点
@@ -393,6 +413,9 @@ class Engine:
         self.global_step = ckpt.get("global_step", 0)
         self.best_metric = ckpt.get("best_metric", float("inf"))
         self.best_epoch = ckpt.get("best_epoch", 0)
+        self.callbacks.load_state_dict(ckpt.get("callbacks"))
+        if load_rng_state:
+            restore_rng_state(ckpt.get("rng_state"))
 
         return self.current_epoch
 

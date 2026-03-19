@@ -39,7 +39,8 @@ class ExperimentManager:
 
         # 生成实验名
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.exp_name = f"{timestamp}_{config.model_name}_{config.marine_param}_x{config.upscale}"
+        dataset_name = getattr(config, "dataset_name", getattr(config, "marine_param", "dataset"))
+        self.exp_name = f"{timestamp}_{config.model_name}_{dataset_name}_x{config.upscale}"
 
         # 实验目录
         self.exp_dir = self.base_dir / self.exp_name

@@ -13,7 +13,7 @@
     scheduler = get_scheduler("cosine", optimizer, T_max=200)
 
     # 列出所有可用调度器
-    print(list_schedulers())
+    logger.info(list_schedulers())
 """
 
 from typing import Dict, Callable, Any, Optional, List

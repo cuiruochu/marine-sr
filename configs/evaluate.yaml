@@ -1,0 +1,28 @@
+defaults:
+  - models: edsr
+  - _self_
+
+dataset:
+  name: wind
+  upscale: 2
+  channels: 1
+  normalize:
+    mean: [4.565732]
+    std: [3.1361]
+  eval_lr_root: ./data/wind/Test/LR/wind
+  eval_hr_root: ./data/wind/Test/wind
+  max_sample: false
+
+evaluate:
+  checkpoint: null
+  save_results: false
+  save_dir: ./results
+  eval_mask: null
+  batch_size: 1
+  num_workers: 4
+
+hydra:
+  run:
+    dir: ./experiments/${now:%Y%m%d_%H%M%S}_evaluate_${models.name}_${dataset.name}_x${dataset.upscale}
+  job:
+    chdir: false
