@@ -19,9 +19,6 @@ checkpoints/
 experiments/
 queue_runs/
 
-# Data
-data/
-
 # Logs
 *.log
 wandb/
