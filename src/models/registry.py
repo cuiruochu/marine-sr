@@ -41,14 +41,12 @@ def ensure_builtin_models_registered() -> None:
     if _BUILTIN_MODELS_REGISTERED:
         return
 
-    # Git-tracked model filenames use mixed case, so imports must match exactly
-    # on case-sensitive filesystems like Linux.
-    for module_name in ("bicubic", "EDSR", "MySR", "MySRAb", "RCAN", "RDN"):
+    for module_name in ("bicubic", "edsr", "mysr", "mysrab", "rcan", "rdn"):
         import_module(f"{__package__}.{module_name}")
 
-    _import_optional_module("SwinIR", "SwinIR")
-    _import_optional_module("ATD", "ATD")
-    _import_optional_module("CAMixer", "CAMixer")
+    _import_optional_module("swinir", "SwinIR")
+    _import_optional_module("atd", "ATD")
+    _import_optional_module("camixer", "CAMixer")
     _BUILTIN_MODELS_REGISTERED = True
 
 
