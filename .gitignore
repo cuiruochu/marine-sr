@@ -20,10 +20,8 @@ __pycache__/
 checkpoints/
 experiments/
 queue_runs/
+.test-artifacts/
 
 # Logs
 *.log
 wandb/
-
-# Lock files
-uv.lock

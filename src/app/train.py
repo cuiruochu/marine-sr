@@ -1,81 +1,64 @@
-"""
-训练编排入口
-"""
+"""训练编排入口。"""
 
-from dataclasses import asdict
+import logging
 import os
-from pathlib import Path
 
-import hydra
 import torch
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig
 
-from src.app.builders import (
+from src.app.checkpoint_validation import validate_checkpoint_matches_config
+from src.app.config_parsing import load_train_config
+from src.app.config_types import TrainAppConfig
+from src.app.model_builders import build_model_bundle
+from src.app.runtime import build_config_snapshot, hydra_run_name, init_task_logger
+from src.app.train_builders import (
     build_loss_fn,
-    build_model_bundle,
     build_optimizer,
     build_scheduler,
     build_train_callbacks,
     build_train_loaders,
 )
-from src.app.checkpoint_validation import validate_checkpoint_matches_config
-from src.app.config import TrainAppConfig, load_train_config
-from src.core import Engine
-from src.data import set_epoch_for_sampler, validate_train_runtime_inputs
-from src.utils import PROJECT_ROOT, get_logger, init_logger, seed_everything
-from src.utils.distributed import (
-    cleanup_distributed,
-    get_rank,
-    get_world_size,
-    init_distributed,
-    is_main_process,
-)
+from src.core.engine import Engine
+from src.datamodules.validation import validate_train_runtime_inputs
+from src.utils.path import resolve_project_path
+from src.utils.random_state import seed_everything
+
+logger = logging.getLogger(__name__)
 
 
 def run_training(raw_cfg: DictConfig | TrainAppConfig):
     cfg = raw_cfg if isinstance(raw_cfg, TrainAppConfig) else load_train_config(raw_cfg)
 
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-    is_ddp = world_size > 1
+    if int(os.environ.get("WORLD_SIZE", 1)) > 1:
+        raise NotImplementedError("当前版本仅支持单进程单卡训练，不支持多进程启动")
 
-    if is_ddp:
-        init_distributed()
-        local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        device = f"cuda:{local_rank}"
-        torch.cuda.set_device(device)
-    else:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    seed_everything(cfg.seed)
 
-    seed = cfg.seed + (get_rank() if is_ddp else 0)
-    seed_everything(seed)
-
-    logger = _init_train_logger(is_ddp)
-    if logger is not None:
-        _log_training_configuration(logger, cfg)
+    init_task_logger("train.log")
+    logger.info("单卡训练")
+    logger.info("配置信息:")
+    _log_training_configuration(logger, cfg)
 
     validate_train_runtime_inputs(cfg)
 
     model_bundle = build_model_bundle(cfg)
     model = model_bundle["model"]
 
-    if logger is not None:
-        total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        logger.info(f"  可训练参数: {total_params:,}")
-        logger.info("创建数据加载器...")
+    total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(f"  可训练参数: {total_params:,}")
+    logger.info("创建数据加载器...")
 
     train_loader, val_loader = build_train_loaders(cfg)
     optimizer = build_optimizer(cfg, model)
     scheduler = build_scheduler(cfg, optimizer)
     loss_fn = build_loss_fn(cfg)
 
-    wandb_name = None
-    if cfg.wandb.mode != "disabled" and is_main_process():
-        output_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
-        wandb_name = os.path.basename(output_dir)
+    wandb_name = hydra_run_name() if cfg.wandb.mode != "disabled" else None
 
     callbacks = build_train_callbacks(
         cfg,
-        main_process=is_main_process(),
+        main_process=True,
         wandb_name=wandb_name,
         raw_config=raw_cfg if not isinstance(raw_cfg, TrainAppConfig) else None,
     )
@@ -87,14 +70,13 @@ def run_training(raw_cfg: DictConfig | TrainAppConfig):
         scheduler=scheduler,
         device=device,
         callbacks=callbacks,
-        ddp=is_ddp,
-        config_snapshot=_build_config_snapshot(raw_cfg, cfg),
+        config_snapshot=build_config_snapshot(raw_cfg, cfg),
     )
 
     start_epoch = 1
     remaining_epochs = cfg.train.epochs
     if cfg.resume.checkpoint:
-        checkpoint_path = _resolve_project_path(cfg.resume.checkpoint)
+        checkpoint_path = resolve_project_path(cfg.resume.checkpoint)
         if not checkpoint_path.exists():
             raise FileNotFoundError(f"恢复训练检查点不存在: {checkpoint_path}")
         validate_checkpoint_matches_config(cfg, checkpoint_path)
@@ -108,57 +90,28 @@ def run_training(raw_cfg: DictConfig | TrainAppConfig):
         start_epoch = loaded_epoch + 1
         remaining_epochs = cfg.train.epochs - loaded_epoch
 
-        if logger is not None:
-            logger.info(f"从检查点恢复训练: {checkpoint_path}")
-            logger.info(f"  已完成轮数: {loaded_epoch}")
-            logger.info(f"  剩余轮数: {max(remaining_epochs, 0)}")
+        logger.info(f"从检查点恢复训练: {checkpoint_path}")
+        logger.info(f"  已完成轮数: {loaded_epoch}")
+        logger.info(f"  剩余轮数: {max(remaining_epochs, 0)}")
 
         if remaining_epochs <= 0:
-            if logger is not None:
-                logger.info("配置中的总训练轮数不大于检查点轮数，无需继续训练")
-            if is_ddp:
-                cleanup_distributed()
+            logger.info("配置中的总训练轮数不大于检查点轮数，无需继续训练")
             return
 
-    if logger is not None:
-        logger.info("开始训练...")
+    logger.info("开始训练...")
 
-    mean = cfg.dataset.normalize.mean
-    std = cfg.dataset.normalize.std
+    engine.fit(
+        train_loader=train_loader,
+        val_loader=val_loader,
+        epochs=remaining_epochs,
+        start_epoch=start_epoch,
+    )
 
-    if is_ddp:
-        _fit_distributed(engine, train_loader, val_loader, remaining_epochs, mean, std, start_epoch=start_epoch)
-    else:
-        engine.fit(
-            train_loader=train_loader,
-            val_loader=val_loader,
-            epochs=remaining_epochs,
-            mean=mean,
-            std=std,
-            start_epoch=start_epoch,
-        )
-
-    if is_ddp:
-        cleanup_distributed()
-
-    if logger is not None:
-        logger.info("训练完成")
-
-
-def _init_train_logger(is_ddp: bool):
-    if not is_main_process():
-        return None
-
-    init_logger()
-    logger = get_logger()
-    mode_str = f"分布式训练 ({get_world_size()} GPUs)" if is_ddp else "单卡训练"
-    logger.info(mode_str)
-    logger.info("配置信息:")
-    return logger
+    logger.info("训练完成")
 
 
 def _log_training_configuration(logger, cfg: TrainAppConfig):
-    logger.info(f"  模型: {cfg.model.name}")
+    logger.info(f"  模型: {cfg.models.name}")
     logger.info(f"  数据集: {cfg.dataset.name}")
     logger.info(f"  放大倍数: {cfg.dataset.upscale}")
     logger.info(f"  训练轮数: {cfg.train.epochs}")
@@ -168,39 +121,3 @@ def _log_training_configuration(logger, cfg: TrainAppConfig):
     logger.info(f"  调度器: {cfg.train.scheduler.name}")
     logger.info(f"  损失函数: {cfg.train.loss.name}")
     logger.info("创建模型...")
-
-
-def _fit_distributed(engine: Engine, train_loader, val_loader, epochs: int, mean, std, start_epoch: int = 1):
-    engine.callbacks.on_train_begin(engine)
-
-    for epoch in range(start_epoch, start_epoch + epochs):
-        engine.current_epoch = epoch
-        set_epoch_for_sampler(train_loader, epoch)
-
-        engine.callbacks.on_epoch_begin(engine, epoch)
-        engine._train_loader = train_loader
-        epoch_loss = engine._train_epoch(train_loader)
-
-        val_logs = engine.evaluate(val_loader, mean, std)
-        val_logs["lr"] = engine.lr
-        val_logs["train_loss"] = epoch_loss
-
-        if engine.scheduler is not None:
-            engine.scheduler.step()
-
-        engine.callbacks.on_epoch_end(engine, epoch, val_logs)
-
-    engine.callbacks.on_train_end(engine)
-
-
-def _build_config_snapshot(raw_cfg: DictConfig | TrainAppConfig, cfg: TrainAppConfig) -> dict:
-    if isinstance(raw_cfg, DictConfig):
-        return OmegaConf.to_container(raw_cfg, resolve=True)
-    return asdict(cfg)
-
-
-def _resolve_project_path(path_str: str) -> Path:
-    path = Path(path_str)
-    if path.is_absolute():
-        return path
-    return PROJECT_ROOT / path

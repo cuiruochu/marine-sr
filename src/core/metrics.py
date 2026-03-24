@@ -1,250 +1,162 @@
-"""
-指标计算模块
+"""指标计算函数。"""
 
-提供 PSNR、SSIM、MAE 等评估指标的计算函数。
-"""
+from typing import Optional
 
 import torch
-import numpy as np
 import torch.nn.functional as F
-import cv2
-from typing import Optional, Tuple, Union
+
+EPS = 1e-12
 
 
-def reverse_norm(
-    img: torch.Tensor,
-    mean: torch.Tensor,
-    std: torch.Tensor
+def _reduction_dims(img: torch.Tensor) -> tuple[int, ...]:
+    if img.ndim < 2:
+        raise ValueError(f"指标输入至少需要 2 维，当前 shape={tuple(img.shape)}")
+    return tuple(range(1, img.ndim))
+
+
+def _build_gaussian_window(
+    kernel_size: int,
+    sigma: float,
+    channels: int,
+    device: torch.device,
+    dtype: torch.dtype,
 ) -> torch.Tensor:
-    """
-    反归一化
-
-    Args:
-        img: 图像张量 (B, C, H, W) 或 (C, H, W)
-        mean: 均值 (C, 1, 1)
-        std: 标准差 (C, 1, 1)
-
-    Returns:
-        反归一化后的图像
-    """
-    return img * std + mean
+    coords = torch.arange(kernel_size, device=device, dtype=dtype) - kernel_size // 2
+    gaussian = torch.exp(-(coords**2) / (2 * sigma**2))
+    gaussian = gaussian / gaussian.sum()
+    window_2d = torch.outer(gaussian, gaussian)
+    window = window_2d.unsqueeze(0).unsqueeze(0)
+    return window.expand(channels, 1, kernel_size, kernel_size).contiguous()
 
 
-def normalize_to_01(
-    hr_img: torch.Tensor,
-    hr_hat: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    将 HR 和 SR 归一化到 [0, 1] 范围
-
-    使用两者的联合最小最大值进行归一化。
-
-    Args:
-        hr_img: HR 图像 (B, C, H, W)
-        hr_hat: SR 图像 (B, C, H, W)
-
-    Returns:
-        (hr_norm, sr_norm): 归一化后的图像
-    """
-    def norm(tensor, min_val, max_val):
-        return (tensor - min_val) / (max_val - min_val + 1e-8)
-
-    min_vals = torch.minimum(
-        hr_img.view(hr_img.size(0), -1).min(dim=1).values,
-        hr_hat.view(hr_hat.size(0), -1).min(dim=1).values
-    )
-    max_vals = torch.maximum(
-        hr_img.view(hr_img.size(0), -1).max(dim=1).values,
-        hr_hat.view(hr_hat.size(0), -1).max(dim=1).values
-    )
-
-    min_vals = min_vals.view(-1, 1, 1, 1)
-    max_vals = max_vals.view(-1, 1, 1, 1)
-
-    hr_norm = norm(hr_img, min_vals, max_vals)
-    sr_norm = norm(hr_hat, min_vals, max_vals)
-
-    return hr_norm, sr_norm
+def _broadcast_mask(mask: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    if mask.ndim == 2:
+        mask = mask.unsqueeze(0).unsqueeze(0)
+    elif mask.ndim == 3:
+        mask = mask.unsqueeze(1)
+    return torch.broadcast_to(mask.to(device=target.device), target.shape).to(dtype=target.dtype)
 
 
-def apply_mask(
-    mask: Optional[torch.Tensor],
-    *imgs: torch.Tensor
-) -> Union[torch.Tensor, Tuple[torch.Tensor, ...]]:
-    """
-    应用掩码到图像
+def calculate_psnr(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> float:
+    """计算 PSNR，假设输入已经在 [0, 1] 范围内。"""
+    dims = _reduction_dims(img1)
+    squared_error = (img1 - img2) ** 2
 
-    Args:
-        mask: 掩码张量，None 表示不应用
-        *imgs: 图像张量
-
-    Returns:
-        应用掩码后的图像（单个或元组）
-    """
-    res = []
-    for img in imgs:
-        if mask is not None:
-            if mask.shape != img.shape:
-                mask = _expand_mask(mask, img)
-            img = img * mask
-        res.append(img)
-    return res[0] if len(res) == 1 else tuple(res)
-
-
-def calculate_mae(
-    img: torch.Tensor,
-    img_hat: torch.Tensor,
-    mask: Optional[torch.Tensor] = None
-) -> float:
-    """
-    计算 MAE (Mean Absolute Error)
-
-    Args:
-        img: 真实图像
-        img_hat: 预测图像
-        mask: 可选掩码
-
-    Returns:
-        MAE 值
-    """
-    loss_map = torch.abs(img - img_hat)
     if mask is not None:
-        mask = _expand_mask(mask, loss_map)
-        loss_map = loss_map[mask]
-    return loss_map.mean().item()
+        mask = _broadcast_mask(mask, img1)
+        mse = (squared_error * mask).sum(dim=dims) / mask.sum(dim=dims).clamp_min(1.0)
+    else:
+        mse = squared_error.mean(dim=dims)
 
-
-def calculate_max_mae(
-    img: torch.Tensor,
-    img_hat: torch.Tensor,
-    mask: Optional[torch.Tensor] = None
-) -> float:
-    """
-    计算最大 MAE
-
-    Args:
-        img: 真实图像
-        img_hat: 预测图像
-        mask: 可选掩码
-
-    Returns:
-        最大 MAE 值
-    """
-    loss_map = torch.abs(img - img_hat)
-    if mask is not None:
-        mask = _expand_mask(mask, loss_map)
-        loss_map = loss_map[mask]
-    return loss_map.max().item()
-
-
-def calculate_psnr(
-    img: torch.Tensor,
-    img_hat: torch.Tensor,
-    mask: Optional[torch.Tensor] = None
-) -> float:
-    """
-    计算 PSNR (Peak Signal-to-Noise Ratio)
-
-    注意：输入图像应已归一化到 [0, 1] 范围
-
-    Args:
-        img: 真实图像 (已归一化)
-        img_hat: 预测图像 (已归一化)
-        mask: 可选掩码
-
-    Returns:
-        PSNR 值 (dB)
-    """
-    loss_map = (img - img_hat) ** 2
-    if mask is not None:
-        mask = _expand_mask(mask, loss_map)
-        loss_map = loss_map[mask]
-    mse = loss_map.mean()
-    psnr = 10. * torch.log10(1. / (mse + 1e-8))
-    return psnr.item()
+    psnr = torch.where(mse <= EPS, torch.full_like(mse, float("inf")), 10.0 * torch.log10(1.0 / mse.clamp_min(EPS)))
+    return psnr.mean().item()
 
 
 def calculate_ssim(
-    img: torch.Tensor,
+    img1: torch.Tensor,
     img2: torch.Tensor,
-    mask: Optional[torch.Tensor] = None
+    mask: Optional[torch.Tensor] = None,
+    *,
+    kernel_size: int = 11,
+    sigma: float = 1.5,
 ) -> float:
-    """
-    计算 SSIM (Structural Similarity Index)
+    """计算窗口化 SSIM，假设输入已经在 [0, 1] 范围内。"""
+    if img1.ndim != 4 or img2.ndim != 4:
+        raise ValueError(f"SSIM 仅支持 NCHW 四维输入，当前 img1={tuple(img1.shape)}, img2={tuple(img2.shape)}")
+    if img1.shape != img2.shape:
+        raise ValueError(f"SSIM 输入 shape 必须一致: img1={tuple(img1.shape)}, img2={tuple(img2.shape)}")
+    if kernel_size % 2 == 0:
+        raise ValueError(f"kernel_size 必须为奇数，当前={kernel_size}")
 
-    注意：输入图像应已归一化到 [0, 1] 范围
+    channels = img1.shape[1]
+    padding = kernel_size // 2
+    window = _build_gaussian_window(kernel_size, sigma, channels, img1.device, img1.dtype)
 
-    Args:
-        img: 真实图像 (B, C, H, W)，已归一化
-        img2: 预测图像 (B, C, H, W)，已归一化
-        mask: 可选掩码 (H, W)，1 表示有效区域
-
-    Returns:
-        SSIM 值
-    """
     if mask is None:
-        mask = torch.ones_like(img)
+        mask = torch.ones_like(img1)
     else:
-        mask = _expand_mask(mask, img)
+        mask = _broadcast_mask(mask, img1)
 
-    # 转换数据类型
-    img = img.to(torch.float64)
-    img2 = img2.to(torch.float64)
-    mask = mask.to(img.dtype)
+    mask_map = F.conv2d(mask, window, padding=padding, groups=channels)
+    safe_mask_map = mask_map.clamp_min(EPS)
 
-    # 转换到 [0, 255] 范围
-    img = img * 255.
-    img2 = img2 * 255.
+    mu1 = F.conv2d(img1 * mask, window, padding=padding, groups=channels) / safe_mask_map
+    mu2 = F.conv2d(img2 * mask, window, padding=padding, groups=channels) / safe_mask_map
+    second1 = F.conv2d(img1 * img1 * mask, window, padding=padding, groups=channels) / safe_mask_map
+    second2 = F.conv2d(img2 * img2 * mask, window, padding=padding, groups=channels) / safe_mask_map
+    second12 = F.conv2d(img1 * img2 * mask, window, padding=padding, groups=channels) / safe_mask_map
 
-    # SSIM 常数
-    c1 = (0.01 * 255) ** 2
-    c2 = (0.03 * 255) ** 2
-
-    # 创建高斯窗口
-    kernel = cv2.getGaussianKernel(11, 1.5)
-    window = np.outer(kernel, kernel.transpose())
-    window = torch.from_numpy(window).view(1, 1, 11, 11).expand(
-        img.size(1), 1, 11, 11
-    ).to(img.dtype).to(img.device)
-
-    # 卷积参数
-    conv_params = dict(stride=1, padding=0, groups=img.shape[1])
-    eps = 1e-12
-
-    # 计算每个窗口的权重和
-    W_sum = F.conv2d(mask, window, **conv_params)
-
-    # 计算加权均值
-    mu1 = F.conv2d(img * mask, window, **conv_params) / (W_sum + eps)
-    mu2 = F.conv2d(img2 * mask, window, **conv_params) / (W_sum + eps)
     mu1_sq = mu1.pow(2)
     mu2_sq = mu2.pow(2)
     mu1_mu2 = mu1 * mu2
 
-    # 计算加权方差和协方差
-    sigma1_sq = F.conv2d(img * img * mask, window, **conv_params) / (W_sum + eps) - mu1_sq
-    sigma2_sq = F.conv2d(img2 * img2 * mask, window, **conv_params) / (W_sum + eps) - mu2_sq
-    sigma12 = F.conv2d(img * img2 * mask, window, **conv_params) / (W_sum + eps) - mu1_mu2
+    sigma1_sq = (second1 - mu1_sq).clamp_min(0.0)
+    sigma2_sq = (second2 - mu2_sq).clamp_min(0.0)
+    sigma12 = second12 - mu1_mu2
 
-    # SSIM map
-    cs_map = (2 * sigma12 + c2) / (sigma1_sq + sigma2_sq + c2)
-    ssim_map = ((2 * mu1_mu2 + c1) / (mu1_sq + mu2_sq + c1)) * cs_map
+    C1 = 0.01**2
+    C2 = 0.03**2
 
-    # 计算加权平均 SSIM
-    sum_W_sum = torch.sum(W_sum, dim=[1, 2, 3])
-    ssim_per_image = torch.sum(ssim_map * W_sum, dim=[1, 2, 3]) / (sum_W_sum + eps)
-    ssim_per_image[sum_W_sum == 0] = 0
+    numerator = (2 * mu1_mu2 + C1) * (2 * sigma12 + C2)
+    denominator = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    ssim = numerator / denominator.clamp_min(EPS)
+    valid = mask_map > 0
+    if valid.any():
+        return ssim.masked_select(valid).mean().item()
+    return 0.0
 
-    return ssim_per_image.mean().item()
+
+def calculate_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> float:
+    """计算 MAE。"""
+    dims = _reduction_dims(img1)
+    diff = torch.abs(img1 - img2)
+
+    if mask is not None:
+        mask = _broadcast_mask(mask, img1)
+        mae = (diff * mask).sum(dim=dims) / mask.sum(dim=dims).clamp_min(1.0)
+    else:
+        mae = diff.mean(dim=dims)
+    return mae.mean().item()
 
 
-def _expand_mask(mask: torch.Tensor, reference: torch.Tensor) -> torch.Tensor:
-    if mask.shape == reference.shape:
-        return mask
-    if mask.ndim != reference.ndim:
-        raise ValueError(f"mask 维度与参考张量不一致: mask={mask.shape}, ref={reference.shape}")
-    if mask.size(0) != reference.size(0):
-        raise ValueError(f"mask batch 维度与参考张量不一致: mask={mask.shape}, ref={reference.shape}")
-    if mask.size(1) == 1 and reference.size(1) > 1:
-        return mask.expand(-1, reference.size(1), -1, -1)
-    raise ValueError(f"mask 形状无法广播到参考张量: mask={mask.shape}, ref={reference.shape}")
+def calculate_max_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> float:
+    """计算最大 MAE。"""
+    dims = _reduction_dims(img1)
+    diff = torch.abs(img1 - img2)
+    if mask is not None:
+        mask = _broadcast_mask(mask, img1)
+        diff = diff * mask
+    return diff.amax(dim=dims).max().item()
+
+
+def reverse_norm(img: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
+    """反归一化。"""
+    return img * std + mean
+
+
+def normalize_to_01(img1: torch.Tensor, img2: torch.Tensor) -> tuple:
+    """归一化到 [0, 1] 范围用于 PSNR/SSIM 计算。"""
+    dims = _reduction_dims(img1)
+    min_val = torch.minimum(
+        img1.amin(dim=dims, keepdim=True),
+        img2.amin(dim=dims, keepdim=True),
+    )
+    max_val = torch.maximum(
+        img1.amax(dim=dims, keepdim=True),
+        img2.amax(dim=dims, keepdim=True),
+    )
+    scale = max_val - min_val
+    safe_scale = scale.clamp_min(1e-8)
+
+    img1_norm = (img1 - min_val) / safe_scale
+    img2_norm = (img2 - min_val) / safe_scale
+    zero_scale = scale < 1e-8
+    img1_norm = torch.where(zero_scale, torch.zeros_like(img1_norm), img1_norm)
+    img2_norm = torch.where(zero_scale, torch.zeros_like(img2_norm), img2_norm)
+
+    return img1_norm, img2_norm
+
+
+def apply_output_mask(sr: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """将输出结果应用 mask，False 区域置零，后续保存时再转成 None。"""
+    return sr * _broadcast_mask(mask, sr)

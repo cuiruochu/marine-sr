@@ -1,4 +1,4 @@
-defaults:
+﻿defaults:
   - models: edsr
   - _self_
 
@@ -15,6 +15,7 @@ infer:
   checkpoint: null
   save_results: true
   save_dir: ./results
+  mask: null
   batch_size: 1
   num_workers: 4
 

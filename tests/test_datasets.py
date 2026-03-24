@@ -1,261 +1,150 @@
-"""
-数据集与数据加载测试
-"""
+﻿"""测试数据集。"""
 
 import os
 import tempfile
-from types import SimpleNamespace
 
 import numpy as np
-import pytest
-import torch
+from torch.utils.data import ConcatDataset
 
-from src.data import (
-    build_eval_dataloader,
-    build_test_dataset,
-    build_test_loader,
-    build_train_dataloader,
-    build_train_dataset,
-    build_val_dataset,
-)
-from src.datasets import MarineEvalDataset, MarineInferenceDataset, MarineTrainDataset
-from src.datasets.utils import normalize
+from src.datasets.marine import MarineEvalDataset, MarineInferDataset, MarineTrainDataset
+from src.datasets.samplers import ChannelBatchSampler
 
 
-class TestDatasetTransforms:
-    def test_normalize_shape(self):
-        mean = torch.tensor([1.0]).unsqueeze(-1).unsqueeze(-1)
-        std = torch.tensor([2.0]).unsqueeze(-1).unsqueeze(-1)
-        x = torch.randn(1, 64, 64)
-        normalized = normalize(mean, std, x)
-        assert normalized.shape == x.shape
-
-
-class TestMarineEvalDataset:
-    @pytest.fixture
-    def temp_data_dir(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            lr_dir = os.path.join(tmpdir, "lr")
-            hr_dir = os.path.join(tmpdir, "hr")
-            os.makedirs(lr_dir)
-            os.makedirs(hr_dir)
-            for i in range(3):
-                lr = np.random.rand(32, 32).astype(np.float32)
-                hr = np.random.rand(64, 64).astype(np.float32)
-                np.save(os.path.join(lr_dir, f"test_{i}.npy"), lr)
-                np.save(os.path.join(hr_dir, f"test_{i}.npy"), hr)
-            yield lr_dir, hr_dir
-
-    def test_eval_dataset_length(self, temp_data_dir):
-        lr_dir, hr_dir = temp_data_dir
-        dataset = MarineEvalDataset(
-            lr_root=lr_dir,
-            hr_root=hr_dir,
-            upscale=2,
-            mean=[0.5],
-            std=[1.0],
-            max_sample=False,
-        )
-        assert len(dataset) == 3
-
-    def test_eval_dataset_getitem_shape(self, temp_data_dir):
-        lr_dir, hr_dir = temp_data_dir
-        dataset = MarineEvalDataset(
-            lr_root=lr_dir,
-            hr_root=hr_dir,
-            upscale=2,
-            mean=[0.5],
-            std=[1.0],
-            max_sample=False,
-        )
-        lr, hr, filename = dataset[0]
-        assert hr.shape == (1, 64, 64)
-        assert lr.shape == (1, 32, 32)
-        assert filename.endswith(".npy")
-
-
-class TestMarineInferenceDataset:
-    def test_inference_dataset_getitem_shape(self, tmp_path):
-        for i in range(3):
-            lr = np.random.rand(32, 32).astype(np.float32)
-            np.save(tmp_path / f"sample_{i}.npy", lr)
-
-        dataset = MarineInferenceDataset(
-            lr_root=str(tmp_path),
-            mean=[0.5],
-            std=[1.0],
-        )
-
-        lr, filename = dataset[0]
-        assert lr.shape == (1, 32, 32)
-        assert filename.endswith(".npy")
+def _write_pair_samples(lr_dir, hr_dir, count, *, lr_shape, hr_shape):
+    os.makedirs(lr_dir, exist_ok=True)
+    os.makedirs(hr_dir, exist_ok=True)
+    for i in range(count):
+        np.save(os.path.join(lr_dir, f"sample_{i}.npy"), np.random.rand(*lr_shape).astype(np.float32))
+        np.save(os.path.join(hr_dir, f"sample_{i}.npy"), np.random.rand(*hr_shape).astype(np.float32))
 
 
 class TestMarineTrainDataset:
-    @pytest.fixture
-    def temp_data_dir(self):
+    def test_paired_sample_dataset(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             lr_dir = os.path.join(tmpdir, "lr")
             hr_dir = os.path.join(tmpdir, "hr")
-            os.makedirs(lr_dir)
-            os.makedirs(hr_dir)
-            for i in range(5):
-                lr = np.random.rand(60, 60).astype(np.float32)
-                hr = np.random.rand(120, 120).astype(np.float32)
-                np.save(os.path.join(lr_dir, f"train_{i}.npy"), lr)
-                np.save(os.path.join(hr_dir, f"train_{i}.npy"), hr)
-            yield lr_dir, hr_dir
+            _write_pair_samples(lr_dir, hr_dir, 3, lr_shape=(64, 64), hr_shape=(128, 128))
 
-    def test_train_dataset_length(self, temp_data_dir):
-        lr_dir, hr_dir = temp_data_dir
-        dataset = MarineTrainDataset(
-            lr_root=lr_dir,
-            hr_root=hr_dir,
-            upscale=2,
-            lr_patch_size=30,
-            mean=[0.5],
-            std=[1.0],
-        )
-        assert len(dataset) == 5
+            dataset = MarineTrainDataset(
+                lr_root=lr_dir,
+                hr_root=hr_dir,
+                upscale=2,
+                lr_patch_size=16,
+                mean=[0.5],
+                std=[1.0],
+            )
 
-    def test_train_dataset_getitem_shape(self, temp_data_dir):
-        lr_dir, hr_dir = temp_data_dir
-        dataset = MarineTrainDataset(
-            lr_root=lr_dir,
-            hr_root=hr_dir,
-            upscale=2,
-            lr_patch_size=30,
-            mean=[0.5],
-            std=[1.0],
-        )
-        lr, hr = dataset[0]
-        assert hr.shape == (1, 60, 60)
-        assert lr.shape == (1, 30, 30)
+            assert len(dataset) == 3
+            assert dataset.channel_count == 1
+
+            lr, hr = dataset[0]
+            assert lr.shape == (1, 16, 16)
+            assert hr.shape == (1, 32, 32)
 
 
-class TestDataBuilders:
-    @pytest.fixture
-    def train_spec(self, tmp_path):
-        train_lr_root = tmp_path / "Train" / "LR"
-        train_hr_root = tmp_path / "Train" / "HR"
-        val_lr_root = tmp_path / "Val" / "LR"
-        val_hr_root = tmp_path / "Val" / "HR"
-        eval_lr_root = tmp_path / "Eval" / "LR"
-        eval_hr_root = tmp_path / "Eval" / "HR"
-        infer_lr_root = tmp_path / "Infer" / "LR"
+class TestMarineEvalDataset:
+    def test_paired_eval_dataset(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lr_dir = os.path.join(tmpdir, "lr")
+            hr_dir = os.path.join(tmpdir, "hr")
+            _write_pair_samples(lr_dir, hr_dir, 3, lr_shape=(64, 64), hr_shape=(128, 128))
 
-        for root in (train_lr_root, train_hr_root, val_lr_root, val_hr_root, eval_lr_root, eval_hr_root, infer_lr_root):
-            root.mkdir(parents=True)
+            dataset = MarineEvalDataset(
+                lr_root=lr_dir,
+                hr_root=hr_dir,
+                upscale=2,
+                mean=[0.5],
+                std=[1.0],
+                sample_limit=3,
+                return_filename=True,
+            )
 
-        for root, size in (
-            (train_lr_root, 60),
-            (val_lr_root, 60),
-            (eval_lr_root, 60),
-            (infer_lr_root, 60),
-            (train_hr_root, 120),
-            (val_hr_root, 120),
-            (eval_hr_root, 120),
-        ):
-            for i in range(3):
-                data = np.random.rand(size, size).astype(np.float32)
-                np.save(root / f"sample_{i}.npy", data)
+            lr, hr, filename = dataset[0]
+            assert lr.shape == (1, 64, 64)
+            assert hr.shape == (1, 128, 128)
+            assert filename.endswith(".npy")
 
-        train_spec = SimpleNamespace(
-            upscale=2,
-            lr_patch_size=30,
-            batch_size=2,
-            mean=[0.5],
-            std=[1.0],
-            train_lr_root=str(train_lr_root),
-            train_hr_root=str(train_hr_root),
-            val_lr_root=str(val_lr_root),
-            val_hr_root=str(val_hr_root),
-            max_sample=False,
-        )
+    def test_eval_dataset_can_normalize_hr_for_validation_loss(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lr_dir = os.path.join(tmpdir, "lr")
+            hr_dir = os.path.join(tmpdir, "hr")
+            os.makedirs(lr_dir, exist_ok=True)
+            os.makedirs(hr_dir, exist_ok=True)
+            np.save(os.path.join(lr_dir, "sample_0.npy"), np.full((4, 4), 3.0, dtype=np.float32))
+            np.save(os.path.join(hr_dir, "sample_0.npy"), np.full((8, 8), 7.0, dtype=np.float32))
 
-        eval_spec = SimpleNamespace(
-            upscale=2,
-            mean=[0.5],
-            std=[1.0],
-            lr_root=str(eval_lr_root),
-            hr_root=str(eval_hr_root),
-            mode="evaluation",
-            max_sample=False,
-        )
+            dataset = MarineEvalDataset(
+                lr_root=lr_dir,
+                hr_root=hr_dir,
+                upscale=2,
+                mean=[1.0],
+                std=[2.0],
+                sample_limit=1,
+                return_filename=False,
+                normalize_hr=True,
+            )
 
-        infer_spec = SimpleNamespace(
-            upscale=2,
-            mean=[0.5],
-            std=[1.0],
-            lr_root=str(infer_lr_root),
-            hr_root=None,
-            mode="inference",
-            max_sample=False,
-        )
+            lr, hr = dataset[0]
+            assert float(lr[0, 0, 0]) == 1.0
+            assert float(hr[0, 0, 0]) == 3.0
 
-        return train_spec, eval_spec, infer_spec
 
-    def test_build_train_dataset(self, train_spec):
-        TrainSpec, _, _ = train_spec
-        dataset = build_train_dataset(TrainSpec)
-        assert isinstance(dataset, MarineTrainDataset)
-        assert len(dataset) == 3
+class TestMarineInferDataset:
+    def test_infer_dataset_returns_normalized_tensor_and_filename(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lr_dir = os.path.join(tmpdir, "lr")
+            os.makedirs(lr_dir, exist_ok=True)
+            np.save(os.path.join(lr_dir, "sample_0.npy"), np.full((4, 4), 3.0, dtype=np.float32))
 
-    def test_build_val_dataset(self, train_spec):
-        TrainSpec, _, _ = train_spec
-        dataset = build_val_dataset(TrainSpec, max_sample=2)
-        assert isinstance(dataset, MarineEvalDataset)
-        assert len(dataset) == 2
+            dataset = MarineInferDataset(
+                lr_root=lr_dir,
+                upscale=2,
+                mean=[1.0],
+                std=[2.0],
+                sample_limit=1,
+                return_filename=True,
+            )
 
-    def test_build_test_dataset(self, train_spec):
-        _, EvalSpec, _ = train_spec
-        dataset = build_test_dataset(EvalSpec)
-        assert isinstance(dataset, MarineEvalDataset)
-        assert len(dataset) == 3
+            lr, filename = dataset[0]
+            assert lr.shape == (1, 4, 4)
+            assert float(lr[0, 0, 0]) == 1.0
+            assert filename == "sample_0.npy"
 
-    def test_build_inference_dataset(self, train_spec):
-        _, _, InferSpec = train_spec
-        dataset = build_test_dataset(InferSpec)
-        assert isinstance(dataset, MarineInferenceDataset)
-        assert len(dataset) == 3
 
-    def test_build_train_dataloader(self, train_spec):
-        TrainSpec, _, _ = train_spec
-        dataset = build_train_dataset(TrainSpec)
-        loader = build_train_dataloader(dataset, batch_size=2, num_workers=0)
-        batch = next(iter(loader))
-        assert batch[0].shape == (2, 1, 30, 30)
-        assert batch[1].shape == (2, 1, 60, 60)
-        assert loader.persistent_workers is False
+class TestChannelBatchSampler:
+    def test_batch_sampler(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            lr_dir_1 = os.path.join(tmpdir, "lr1")
+            hr_dir_1 = os.path.join(tmpdir, "hr1")
+            lr_dir_2 = os.path.join(tmpdir, "lr2")
+            hr_dir_2 = os.path.join(tmpdir, "hr2")
+            _write_pair_samples(lr_dir_1, hr_dir_1, 10, lr_shape=(64, 64), hr_shape=(128, 128))
+            _write_pair_samples(lr_dir_2, hr_dir_2, 9, lr_shape=(2, 64, 64), hr_shape=(2, 128, 128))
 
-    def test_build_eval_dataloader(self, train_spec):
-        TrainSpec, _, _ = train_spec
-        dataset = build_val_dataset(TrainSpec, max_sample=2)
-        loader = build_eval_dataloader(dataset, batch_size=1, num_workers=0)
-        batch = next(iter(loader))
-        assert batch[0].shape == (1, 1, 60, 60)
-        assert batch[1].shape == (1, 1, 120, 120)
-        assert loader.persistent_workers is False
+            dataset_1 = MarineTrainDataset(
+                lr_root=lr_dir_1,
+                hr_root=hr_dir_1,
+                upscale=2,
+                lr_patch_size=16,
+                mean=[0.5],
+                std=[1.0],
+            )
+            dataset_2 = MarineTrainDataset(
+                lr_root=lr_dir_2,
+                hr_root=hr_dir_2,
+                upscale=2,
+                lr_patch_size=16,
+                mean=[0.5, 0.5],
+                std=[1.0, 1.0],
+            )
+            dataset = ConcatDataset([dataset_1, dataset_2])
+            dataset.channel_counts = dataset_1.channel_counts + dataset_2.channel_counts
 
-    def test_dataloader_enables_persistent_workers_when_workers_positive(self, train_spec):
-        TrainSpec, _, _ = train_spec
-        dataset = build_train_dataset(TrainSpec)
-        loader = build_train_dataloader(dataset, batch_size=2, num_workers=1)
+            sampler = ChannelBatchSampler(dataset, batch_size=4, drop_last=True, shuffle=False)
+            batches = list(sampler)
 
-        assert loader.num_workers == 1
-        assert loader.persistent_workers is True
-
-    def test_build_test_loader(self, train_spec):
-        _, EvalSpec, _ = train_spec
-        loader = build_test_loader(EvalSpec, batch_size=1, num_workers=0)
-        batch = next(iter(loader))
-        assert batch[0].shape == (1, 1, 60, 60)
-        assert batch[1].shape == (1, 1, 120, 120)
-        assert loader.persistent_workers is False
-
-    def test_build_inference_loader(self, train_spec):
-        _, _, InferSpec = train_spec
-        loader = build_test_loader(InferSpec, batch_size=1, num_workers=0)
-        batch = next(iter(loader))
-        assert batch[0].shape == (1, 1, 60, 60)
-        assert batch[1][0].endswith(".npy")
+            assert len(batches) > 0
+            for batch in batches:
+                assert len(batch) == 4
+                channels = {dataset.channel_counts[index] for index in batch}
+                assert len(channels) == 1

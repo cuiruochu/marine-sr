@@ -1,8 +1,4 @@
-"""
-配对评估入口
-
-要求输入为配对的 LR/HR 数据。
-"""
+﻿"""配对评估入口。"""
 
 import hydra
 from omegaconf import DictConfig

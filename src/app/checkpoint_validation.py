@@ -1,19 +1,18 @@
-"""Checkpoint 与当前任务配置的一致性校验。"""
+﻿"""Checkpoint 与当前任务配置的一致性校验。"""
 
 from pathlib import Path
 from typing import Any, Mapping
 
 import torch
 
-from src.app.config import EvaluateAppConfig, InferAppConfig, TrainAppConfig
+from src.app.config_types import EvalTaskConfig, TrainAppConfig
 
 
 def validate_checkpoint_matches_config(
-    cfg: TrainAppConfig | EvaluateAppConfig | InferAppConfig,
+    cfg: TrainAppConfig | EvalTaskConfig,
     checkpoint_path: str | Path,
 ) -> None:
-    """校验 checkpoint 中的配置快照是否与当前任务配置一致。"""
-    checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=True)
+    checkpoint = torch.load(str(checkpoint_path), map_location="cpu", weights_only=False)
     if not isinstance(checkpoint, Mapping):
         raise ValueError(f"检查点格式无效: {checkpoint_path}")
 
@@ -22,7 +21,7 @@ def validate_checkpoint_matches_config(
         return
 
     current = _build_current_signature(cfg)
-    mismatches: list[str] = []
+    mismatches = []
     for key, current_value in current.items():
         checkpoint_value = signature.get(key)
         if checkpoint_value is None:
@@ -38,25 +37,32 @@ def _extract_checkpoint_signature(config: Any) -> dict[str, Any] | None:
     if not isinstance(config, Mapping):
         return None
 
-    model_section = config.get("models") or config.get("model")
+    model_section = config.get("models")
     dataset_section = config.get("dataset")
     if not isinstance(model_section, Mapping) or not isinstance(dataset_section, Mapping):
         return None
 
-    return {
-        "model.name": model_section.get("name"),
-        "model.params": dict(model_section.get("params", {})),
+    signature = {
+        "models.name": model_section.get("name"),
+        "models.params": dict(model_section.get("params", {})),
         "dataset.name": dataset_section.get("name"),
         "dataset.upscale": dataset_section.get("upscale"),
         "dataset.channels": dataset_section.get("channels"),
     }
+    train_section = config.get("train")
+    if isinstance(train_section, Mapping) and "epochs" in train_section:
+        signature["train.epochs"] = train_section.get("epochs")
+    return signature
 
 
-def _build_current_signature(cfg: TrainAppConfig | EvaluateAppConfig | InferAppConfig) -> dict[str, Any]:
-    return {
-        "model.name": cfg.model.name,
-        "model.params": dict(cfg.model.params),
+def _build_current_signature(cfg: TrainAppConfig | EvalTaskConfig) -> dict[str, Any]:
+    signature = {
+        "models.name": cfg.models.name,
+        "models.params": dict(cfg.models.params),
         "dataset.name": cfg.dataset.name,
         "dataset.upscale": cfg.dataset.upscale,
         "dataset.channels": cfg.dataset.channels,
     }
+    if isinstance(cfg, TrainAppConfig):
+        signature["train.epochs"] = cfg.train.epochs
+    return signature

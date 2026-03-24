@@ -27,7 +27,6 @@ from torchvision.transforms.functional import InterpolationMode, resize
 
 from src.utils.data_files import list_npy_files
 
-
 LOGGER = logging.getLogger("preprocess_dataset")
 
 

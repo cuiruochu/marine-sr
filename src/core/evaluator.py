@@ -1,208 +1,148 @@
-"""
-评估引擎
+"""评估引擎。"""
 
-提供评估循环和回调机制的统一入口。
-"""
+import logging
+from typing import Any
 
-from typing import List, Optional, Dict, Any
-import torch
 import numpy as np
+import torch
 from torch import nn
-from tqdm import tqdm
 
 from .callbacks import Callback, CallbackList
 from .metrics import (
-    calculate_psnr,
-    calculate_ssim,
+    apply_output_mask,
     calculate_mae,
     calculate_max_mae,
-    reverse_norm,
+    calculate_psnr,
+    calculate_ssim,
     normalize_to_01,
-    apply_mask,
+    reverse_norm,
 )
 from .model_output import normalize_model_output
+from .progress import build_progress_points
+
+logger = logging.getLogger(__name__)
 
 
 class Evaluator:
-    """
-    评估引擎
-
-    职责：
-    - 模型加载 (load_checkpoint)
-    - 评估循环 (run)
-    - 单步评估 (eval_step)
-    - 回调触发 (callbacks)
-
-    用法：
-        evaluator = Evaluator(
-            model=model,
-            callbacks=[MetricsCallback(), SaveResultsCallback(...)]
-        )
-        evaluator.load_checkpoint(checkpoint_path)
-        metrics = evaluator.run(test_loader, mean, std, mask)
-
-    回调触发顺序：
-        on_eval_begin()
-        for batch in test_loader:
-            on_batch_begin()
-            sr, hr, filename = eval_step()
-            on_batch_end(sr, hr, filename)
-        on_eval_end(metrics)
-    """
-
     def __init__(
         self,
         model: nn.Module,
-        device: Optional[str] = None,
-        callbacks: Optional[List[Callback]] = None,
+        device: str | None = None,
+        callbacks: list[Callback] | None = None,
     ):
-        """
-        初始化评估引擎
-
-        Args:
-            model: 模型
-            device: 设备，默认自动检测
-            callbacks: 回调列表
-        """
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.model = model.to(self.device)
         self.callbacks = CallbackList(callbacks or [])
-
-        # 状态
         self.current_batch = 0
         self.total_batches = 0
 
     def load_checkpoint(self, path: str) -> None:
-        """
-        加载模型权重
+        ckpt = torch.load(path, map_location=self.device, weights_only=False)
 
-        Args:
-            path: 检查点路径
-        """
-        ckpt = torch.load(path, map_location=self.device, weights_only=True)
-
-        # 支持完整检查点或仅权重
-        if "model" in ckpt:
-            self.model.load_state_dict(ckpt["model"])
-        else:
-            self.model.load_state_dict(ckpt)
-
+        state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+        self.model.load_state_dict(state_dict)
         self.model.eval()
 
     @torch.no_grad()
     def run(
         self,
         test_loader: Any,
-        mean: List[float],
-        std: List[float],
-        mask: Optional[np.ndarray] = None,
-    ) -> Dict[str, float]:
-        """
-        运行评估
-
-        Args:
-            test_loader: 测试数据加载器
-            mean: 归一化均值
-            std: 归一化标准差
-            mask: 评估掩码（可选）
-
-        Returns:
-            evaluation 模式返回指标字典，inference 模式返回空字典
-        """
+        mean: list[float],
+        std: list[float],
+        mask: np.ndarray | None = None,
+        mode: str = "evaluation",
+    ) -> dict[str, float]:
         self.model.eval()
         self.total_batches = len(test_loader)
         self.current_batch = 0
+        progress_points = build_progress_points(self.total_batches)
+        stage_name = "Evaluation" if mode == "evaluation" else "Inference"
 
-        # 准备归一化参数
         mean_t = torch.tensor(mean, device=self.device).view(-1, 1, 1)
         std_t = torch.tensor(std, device=self.device).view(-1, 1, 1)
-
-        # 准备掩码
         mask_t = None
         if mask is not None:
-            mask_t = torch.from_numpy(mask).to(self.device).unsqueeze(0).unsqueeze(0)
-            # 转换为 bool 类型用于索引
-            if mask_t.dtype != torch.bool:
-                mask_t = mask_t > 0.5
+            mask_t = torch.from_numpy(mask).to(self.device)
 
-        # 触发评估开始回调
         self.callbacks.on_eval_begin(self)
+        logger.info(f"{stage_name} started: batches={self.total_batches}")
 
-        # 累计指标
         total_psnr, total_ssim, total_mae, total_max_mae = 0.0, 0.0, 0.0, 0.0
-        metric_batches = 0
+        metric_samples = 0
 
-        pbar = tqdm(test_loader, desc="Evaluating")
-
-        for batch in pbar:
+        for batch in test_loader:
             self.current_batch += 1
-
-            # 触发 batch 开始回调
             self.callbacks.on_batch_begin(self, self.current_batch)
 
-            # 评估单步
-            sr, hr, filename = self._eval_step(
-                batch, mean_t, std_t, mask_t
-            )
+            sr, hr, filename = self._eval_step(batch, mean_t, std_t)
 
             if hr is None:
+                self._validate_mask_shape(mask_t, sr)
+                sr_for_save = apply_output_mask(sr, mask_t) if mask_t is not None else sr
                 self.callbacks.on_batch_end(
                     self,
                     self.current_batch,
-                    sr=sr,
+                    sr=sr_for_save,
                     hr=None,
                     filename=filename,
                     metrics=None,
+                    mask=mask,
                 )
+                if self.current_batch in progress_points:
+                    progress = int(self.current_batch * 100 / self.total_batches)
+                    logger.info(
+                        f"{stage_name} progress: {self.current_batch}/{self.total_batches} ({progress}%)"
+                    )
                 continue
 
-            # 计算指标
-            hr_masked, sr_masked = hr, sr
-            if mask_t is not None:
-                hr_masked, sr_masked = apply_mask(mask_t.expand_as(hr), hr, sr)
-
-            hr_norm, sr_norm = normalize_to_01(hr_masked, sr_masked)
+            # PSNR/SSIM are defined on tensors normalized to [0, 1].
+            self._validate_mask_shape(mask_t, hr)
+            hr_norm, sr_norm = normalize_to_01(hr, sr)
 
             batch_psnr = calculate_psnr(hr_norm, sr_norm, mask=mask_t)
             batch_ssim = calculate_ssim(hr_norm, sr_norm, mask=mask_t)
-            batch_mae = calculate_mae(sr_masked, hr_masked, mask=mask_t)
-            batch_max_mae = calculate_max_mae(sr_masked, hr_masked, mask=mask_t)
+            batch_mae = calculate_mae(sr, hr, mask=mask_t)
+            batch_max_mae = calculate_max_mae(sr, hr, mask=mask_t)
+            batch_size = hr.shape[0]
 
-            total_psnr += batch_psnr
-            total_ssim += batch_ssim
-            total_mae += batch_mae
+            total_psnr += batch_psnr * batch_size
+            total_ssim += batch_ssim * batch_size
+            total_mae += batch_mae * batch_size
             total_max_mae = max(total_max_mae, batch_max_mae)
-            metric_batches += 1
+            metric_samples += batch_size
 
-            # 触发 batch 结束回调
-            self.callbacks.on_batch_end(
-                self, self.current_batch,
-                sr=sr, hr=hr, filename=filename,
-                metrics={"psnr": batch_psnr, "ssim": batch_ssim, "mae": batch_mae}
-            )
-
-            # 更新进度条
-            pbar.set_postfix(
-                psnr=f"{batch_psnr:.2f}",
-                ssim=f"{batch_ssim:.4f}",
-                mae=f"{batch_mae:.4f}"
-            )
-
-        # 计算平均指标
-        num_batches = len(test_loader)
-        if metric_batches == 0:
-            metrics = {}
-        else:
             metrics = {
-                "psnr": total_psnr / metric_batches,
-                "ssim": total_ssim / metric_batches,
-                "mae": total_mae / metric_batches,
+                "psnr": batch_psnr,
+                "ssim": batch_ssim,
+                "mae": batch_mae,
+                "max_mae": batch_max_mae,
+            }
+            sr_for_save = apply_output_mask(sr, mask_t) if mask_t is not None else sr
+            self.callbacks.on_batch_end(
+                self,
+                self.current_batch,
+                sr=sr_for_save,
+                hr=hr,
+                filename=filename,
+                metrics=metrics,
+                mask=mask,
+            )
+            if self.current_batch in progress_points:
+                progress = int(self.current_batch * 100 / self.total_batches)
+                logger.info(
+                    f"{stage_name} progress: {self.current_batch}/{self.total_batches} ({progress}%)"
+                )
+
+        metrics = {}
+        if metric_samples > 0:
+            metrics = {
+                "psnr": total_psnr / metric_samples,
+                "ssim": total_ssim / metric_samples,
+                "mae": total_mae / metric_samples,
                 "max_mae": total_max_mae,
             }
 
-        # 触发评估结束回调
         self.callbacks.on_eval_end(self, metrics)
-
         return metrics
 
     def _eval_step(
@@ -210,20 +150,7 @@ class Evaluator:
         batch: Any,
         mean_t: torch.Tensor,
         std_t: torch.Tensor,
-        mask_t: Optional[torch.Tensor],
-    ) -> tuple:
-        """
-        单步评估
-
-        Args:
-            batch: 数据批次，evaluation 为 (lr, hr, filename)，inference 为 (lr, filename)
-            mean_t: 归一化均值张量
-            std_t: 归一化标准差张量
-            mask_t: 掩码张量
-
-        Returns:
-            (sr, hr, filename) - SR结果、HR真值或 None、文件名
-        """
+    ) -> tuple[torch.Tensor, torch.Tensor | None, list[str]]:
         if len(batch) == 3:
             lr, hr, filename = batch[0].to(self.device), batch[1].to(self.device), batch[2]
         elif len(batch) == 2:
@@ -232,24 +159,30 @@ class Evaluator:
         else:
             raise ValueError(f"不支持的评估 batch 结构，长度={len(batch)}")
 
-        # 推理
         sr = normalize_model_output(self.model(lr)).pred
-
-        # 反归一化
         sr = reverse_norm(sr, mean_t, std_t)
 
-        return sr, hr, filename[0] if isinstance(filename, tuple) else filename
+        filenames = self._normalize_filenames(filename, batch_size=lr.shape[0])
+        return sr, hr, filenames
 
-    def count_parameters(self, trainable_only: bool = True) -> int:
-        """
-        统计参数数量
+    @staticmethod
+    def _normalize_filenames(filename: Any, batch_size: int) -> list[str]:
+        if isinstance(filename, str):
+            filenames = [filename]
+        elif isinstance(filename, (list, tuple)):
+            filenames = [str(item) for item in filename]
+        else:
+            raise TypeError(f"filename 必须是字符串或字符串列表，当前类型={type(filename)}")
 
-        Args:
-            trainable_only: 是否只统计可训练参数
+        if len(filenames) != batch_size:
+            raise ValueError(f"filename 数量必须与 batch_size 一致，当前 filenames={len(filenames)}，batch_size={batch_size}")
 
-        Returns:
-            参数数量
-        """
-        if trainable_only:
-            return sum(p.numel() for p in self.model.parameters() if p.requires_grad)
-        return sum(p.numel() for p in self.model.parameters())
+        return filenames
+
+    @staticmethod
+    def _validate_mask_shape(mask: torch.Tensor | None, target: torch.Tensor) -> None:
+        if mask is None:
+            return
+        expected = tuple(target.shape[-2:])
+        if tuple(mask.shape[-2:]) != expected:
+            raise ValueError(f"mask shape 必须等于目标 H,W，期望={expected}，当前={tuple(mask.shape[-2:])}")

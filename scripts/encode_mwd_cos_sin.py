@@ -21,7 +21,6 @@ import numpy as np
 
 from src.utils.data_files import list_npy_files
 
-
 LOGGER = logging.getLogger("encode_mwd_cos_sin")
 
 

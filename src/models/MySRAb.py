@@ -1,5 +1,5 @@
 from .common import torch, nn
-from .MySR import SpatialGatingUnit, Upsample
+from .mysr import SpatialGatingUnit, Upsample
 
 
 # Ab1: 删除分支
@@ -176,3 +176,4 @@ def create_mysrab2_single(params: dict, in_dim: int, upscale: int):
 
     model_name = f"MySRAb2_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
     return create_model_result(model, model_name)
+

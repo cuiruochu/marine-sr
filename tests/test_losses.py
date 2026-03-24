@@ -7,11 +7,9 @@ import torch
 import torch.nn as nn
 
 from src.losses import (
+    LOSS_REGISTRY,
     get_loss,
     list_losses,
-    LOSS_REGISTRY,
-    create_l1_loss,
-    create_l2_loss,
 )
 
 

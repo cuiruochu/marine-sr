@@ -1,4 +1,4 @@
-defaults:
+﻿defaults:
   - models: edsr
   - _self_
 
@@ -7,8 +7,8 @@ seed: 0
 dataset:
   name: wind
   upscale: 2
-  lr_patch_size: 30
   channels: 1
+  lr_patch_size: 30
   normalize:
     mean: [4.565732]
     std: [3.1361]
@@ -16,7 +16,7 @@ dataset:
   train_hr_root: ./data/wind/Train/wind
   val_lr_root: ./data/wind/Val/LR/wind
   val_hr_root: ./data/wind/Val/wind
-  max_sample: 20 # false=全量；正整数=只取前 N 个验证样本
+  max_sample: 20
 
 train:
   epochs: 200
@@ -33,7 +33,7 @@ train:
   scheduler:
     name: cosine
     params:
-      T_max: ${train.epochs} # 按 epoch 调度：每个 epoch 调一次 scheduler.step()
+      T_max: ${train.epochs}
       eta_min: 0.000001
   loss:
     name: l1
@@ -41,7 +41,7 @@ train:
   checkpoint:
     every: 20
     save_best: true
-    monitor: val_mae
+    monitor: val_loss
     mode: min
 
 resume:

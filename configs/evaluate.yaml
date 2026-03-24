@@ -1,4 +1,4 @@
-defaults:
+﻿defaults:
   - models: edsr
   - _self_
 
@@ -11,13 +11,13 @@ dataset:
     std: [3.1361]
   eval_lr_root: ./data/wind/Test/LR/wind
   eval_hr_root: ./data/wind/Test/wind
-  max_sample: false # false=全量；正整数=只取前 N 个评估样本
+  max_sample: false
 
 evaluate:
   checkpoint: null
   save_results: false
   save_dir: ./results
-  eval_mask: null
+  mask: null
   batch_size: 1
   num_workers: 4
 

@@ -1,10 +1,13 @@
+"""
+项目路径工具
+"""
+
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
 
-def resolve_path(path_str: str) -> Path:
-    """解析路径，相对路径基于 PROJECT_ROOT"""
+def resolve_project_path(path_str: str | Path) -> Path:
     path = Path(path_str)
     if path.is_absolute():
         return path

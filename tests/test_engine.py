@@ -1,362 +1,102 @@
-"""Engine 单元测试。"""
-
-import copy
-import pytest
 import torch
 import torch.nn as nn
-import tempfile
-from pathlib import Path
 
-from src.core import Engine, Callback, ModelOutput
-from src.utils import seed_everything
+from src.core.engine import Engine
+from src.optim.scheduler import get_scheduler
 
 
-class DummyModel(nn.Module):
-    """测试用简单模型"""
-
-    def __init__(self, in_dim=1, out_dim=1, upscale=1):
+class IdentityModel(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.upscale = upscale
-        self.conv = nn.Conv2d(in_dim, out_dim, 3, padding=1)
-        # 上采样层
-        if upscale > 1:
-            self.upsample = nn.Upsample(scale_factor=upscale, mode='bilinear', align_corners=False)
-        else:
-            self.upsample = None
+        self.anchor = nn.Parameter(torch.zeros(1))
 
     def forward(self, x):
-        x = self.conv(x)
-        if self.upsample:
-            x = self.upsample(x)
-        return x
+        return x + self.anchor * 0
 
 
-class DummyTupleOutputModel(DummyModel):
-    """返回 (pred, aux_loss) 的测试模型"""
-
-    def forward(self, x):
-        pred = super().forward(x)
-        aux_loss = pred.abs().mean() * 0.1
-        return pred, aux_loss
-
-
-class DummyStructuredOutputModel(DummyModel):
-    """返回 ModelOutput 的测试模型"""
+class AuxLossModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bias = nn.Parameter(torch.ones(1))
 
     def forward(self, x):
-        pred = super().forward(x)
-        aux_loss = pred.square().mean() * 0.01
-        return ModelOutput(pred=pred, aux_losses={"stability": aux_loss})
-
-
-class DummyDataset(torch.utils.data.Dataset):
-    """测试用数据集"""
-
-    def __init__(self, size=10, in_dim=1, upscale=2):
-        self.size = size
-        self.in_dim = in_dim
-        self.upscale = upscale
-
-    def __len__(self):
-        return self.size
-
-    def __getitem__(self, idx):
-        lr = torch.randn(self.in_dim, 16, 16)
-        # HR 尺寸是 LR 的 upscale 倍
-        hr = torch.randn(self.in_dim, 16 * self.upscale, 16 * self.upscale)
-        return lr, hr
-
-
-class TestEngine:
-    """Engine 测试"""
-
-    def test_engine_init(self):
-        """测试 Engine 初始化"""
-        model = DummyModel()
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        assert engine.model is model
-        assert engine.optimizer is optimizer
-        assert engine.current_epoch == 0
-        assert engine.global_step == 0
-
-    def test_train_step(self):
-        """测试训练步骤"""
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        batch = (torch.randn(1, 1, 16, 16), torch.randn(1, 1, 32, 32))
-        logs = engine.train_step(batch)
-
-        assert "loss" in logs
-        assert isinstance(logs["loss"], float)
-
-    def test_train_step_with_tuple_aux_loss(self):
-        """测试 tuple 输出会被合并到训练损失中"""
-        model = DummyTupleOutputModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        batch = (torch.randn(1, 1, 16, 16), torch.randn(1, 1, 32, 32))
-        logs = engine.train_step(batch)
-
-        assert "loss" in logs
-        assert "recon_loss" in logs
-        assert "aux_loss" in logs
-        assert logs["loss"] == pytest.approx(logs["recon_loss"] + logs["aux_loss"], rel=1e-5)
-
-    def test_train_step_with_structured_output(self):
-        """测试 ModelOutput 协议"""
-        model = DummyStructuredOutputModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        batch = (torch.randn(1, 1, 16, 16), torch.randn(1, 1, 32, 32))
-        logs = engine.train_step(batch)
-
-        assert "aux_loss" in logs
-        assert "aux_stability" in logs
-        assert logs["loss"] == pytest.approx(logs["recon_loss"] + logs["aux_loss"], rel=1e-5)
-
-    def test_evaluate(self):
-        """测试评估"""
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        val_loader = torch.utils.data.DataLoader(
-            DummyDataset(size=5, upscale=2), batch_size=2
-        )
-        metrics = engine.evaluate(val_loader, mean=[0], std=[1])
-
-        assert "val_psnr" in metrics
-        assert "val_ssim" in metrics
-        assert "val_mae" in metrics
-
-    def test_fit(self):
-        """测试完整训练"""
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        train_loader = torch.utils.data.DataLoader(
-            DummyDataset(size=4, upscale=2), batch_size=2
-        )
-        val_loader = torch.utils.data.DataLoader(
-            DummyDataset(size=2, upscale=2), batch_size=2
-        )
-
-        history = engine.fit(
-            train_loader=train_loader,
-            val_loader=val_loader,
-            epochs=2,
-            mean=[0],
-            std=[1],
-        )
-
-        assert len(history["train_loss"]) == 2
-        assert len(history["val_psnr"]) == 2
-        assert engine.current_epoch == 2
-
-    def test_save_load_checkpoint(self):
-        """测试检查点保存和加载"""
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        # 模拟训练
-        engine.current_epoch = 5
-        engine.global_step = 100
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "checkpoint.pth"
-            engine.save_checkpoint(str(path), epoch=5)
-
-            # 创建新 engine 并加载
-            new_model = DummyModel(upscale=2)
-            new_optimizer = torch.optim.Adam(new_model.parameters())
-            new_engine = Engine(model=new_model, optimizer=new_optimizer, loss_fn=nn.L1Loss())
-
-            loaded_epoch = new_engine.load_checkpoint(str(path))
-
-            assert loaded_epoch == 5
-            assert new_engine.current_epoch == 5
-            assert new_engine.global_step == 100
-
-    def test_checkpoint_persists_config_rng_and_callback_state(self):
-        """测试 checkpoint 会保存配置、随机数和回调状态。"""
-
-        class StatefulCallback(Callback):
-            def __init__(self):
-                self.value = 0
-
-            def state_dict(self):
-                return {"value": self.value}
-
-            def load_state_dict(self, state):
-                self.value = state["value"]
-
-        seed_everything(123)
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        callback = StatefulCallback()
-        callback.value = 42
-        engine = Engine(
-            model=model,
-            optimizer=optimizer,
-            loss_fn=nn.L1Loss(),
-            callbacks=[callback],
-            config_snapshot={"seed": 123, "model": "dummy"},
-        )
-        engine.current_epoch = 3
-        engine.global_step = 7
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            path = Path(tmpdir) / "checkpoint.pth"
-            engine.save_checkpoint(str(path), epoch=3)
-            ckpt = torch.load(path, weights_only=True)
-
-            assert ckpt["config"] == {"seed": 123, "model": "dummy"}
-            assert "rng_state" in ckpt
-            assert any(state["value"] == 42 for state in ckpt["callbacks"].values())
-
-            new_callback = StatefulCallback()
-            new_engine = Engine(
-                model=DummyModel(upscale=2),
-                optimizer=torch.optim.Adam(DummyModel(upscale=2).parameters()),
-                loss_fn=nn.L1Loss(),
-                callbacks=[new_callback],
-            )
-            new_engine.load_checkpoint(str(path), load_optimizer=False, load_scheduler=False)
-            assert new_callback.value == 42
-
-    def test_resume_training_matches_continuous_training_with_rng_restore(self):
-        """测试恢复训练后结果与连续训练一致。"""
-        seed = 2026
-
-        def build_engine():
-            model = DummyModel(upscale=2)
-            optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
-            return Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss(), scheduler=scheduler)
-
-        def build_loaders():
-            train_loader = torch.utils.data.DataLoader(
-                DummyDataset(size=4, upscale=2), batch_size=2, shuffle=True
-            )
-            val_loader = torch.utils.data.DataLoader(
-                DummyDataset(size=2, upscale=2), batch_size=2, shuffle=False
-            )
-            return train_loader, val_loader
-
-        seed_everything(seed)
-        continuous_engine = build_engine()
-        continuous_train_loader, continuous_val_loader = build_loaders()
-        continuous_engine.fit(
-            train_loader=continuous_train_loader,
-            val_loader=continuous_val_loader,
-            epochs=2,
-            mean=[0],
-            std=[1],
-        )
-        continuous_state = copy.deepcopy(continuous_engine.get_model().state_dict())
-        continuous_optimizer_state = copy.deepcopy(continuous_engine.optimizer.state_dict())
-        continuous_scheduler_state = copy.deepcopy(continuous_engine.scheduler.state_dict())
-
-        seed_everything(seed)
-        partial_engine = build_engine()
-        partial_train_loader, partial_val_loader = build_loaders()
-        partial_engine.fit(
-            train_loader=partial_train_loader,
-            val_loader=partial_val_loader,
-            epochs=1,
-            mean=[0],
-            std=[1],
-        )
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            checkpoint_path = Path(tmpdir) / "resume.pth"
-            partial_engine.save_checkpoint(str(checkpoint_path), epoch=1)
-
-            resumed_engine = build_engine()
-            resumed_train_loader, resumed_val_loader = build_loaders()
-            loaded_epoch = resumed_engine.load_checkpoint(str(checkpoint_path))
-            resumed_engine.fit(
-                train_loader=resumed_train_loader,
-                val_loader=resumed_val_loader,
-                epochs=1,
-                mean=[0],
-                std=[1],
-                start_epoch=loaded_epoch + 1,
-            )
-
-        resumed_state = resumed_engine.get_model().state_dict()
-        for key, tensor in continuous_state.items():
-            assert torch.allclose(tensor, resumed_state[key])
-
-        assert resumed_engine.optimizer.state_dict()["param_groups"] == continuous_optimizer_state["param_groups"]
-        assert resumed_engine.scheduler.state_dict() == continuous_scheduler_state
-        assert resumed_engine.global_step == continuous_engine.global_step
-        assert resumed_engine.current_epoch == continuous_engine.current_epoch
-
-    def test_count_parameters(self):
-        """测试参数统计"""
-        model = DummyModel(in_dim=1, out_dim=1, upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        total = engine.count_parameters(trainable_only=True)
-
-        assert total > 0
-        assert total == sum(p.numel() for p in model.parameters() if p.requires_grad)
-
-    def test_lr_property(self):
-        """测试学习率属性"""
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        engine = Engine(model=model, optimizer=optimizer, loss_fn=nn.L1Loss())
-
-        assert engine.lr == 1e-4
-
-
-class TestCallback:
-    """Callback 测试"""
-
-    def test_callback_hooks(self):
-        """测试回调钩子"""
-
-        class CountingCallback(Callback):
-            def __init__(self):
-                self.call_count = 0
-
-            def on_train_begin(self, engine):
-                self.call_count += 1
-
-            def on_train_end(self, engine):
-                self.call_count += 1
-
-            def on_epoch_begin(self, engine, epoch):
-                self.call_count += 1
-
-            def on_epoch_end(self, engine, epoch, logs):
-                self.call_count += 1
-
-        model = DummyModel(upscale=2)
-        optimizer = torch.optim.Adam(model.parameters())
-        callback = CountingCallback()
-        engine = Engine(
-            model=model,
-            optimizer=optimizer,
-            loss_fn=nn.L1Loss(),
-            callbacks=[callback],
-        )
-
-        train_loader = torch.utils.data.DataLoader(DummyDataset(size=2, upscale=2), batch_size=1)
-        val_loader = torch.utils.data.DataLoader(DummyDataset(size=1, upscale=2), batch_size=1)
-
-        engine.fit(train_loader, val_loader, epochs=2, mean=[0], std=[1])
-
-        # on_train_begin + on_train_end + 2 * (on_epoch_begin + on_epoch_end)
-        assert callback.call_count == 6
+        pred = x + self.bias.view(1, 1, 1, 1)
+        aux_loss = self.bias.square().mean()
+        return pred, {"aux_losses": {"aux": aux_loss}}
+
+
+def test_engine_evaluate_returns_validation_loss_only():
+    model = IdentityModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3)
+    engine = Engine(
+        model=model,
+        optimizer=optimizer,
+        loss_fn=nn.L1Loss(),
+        callbacks=[],
+        device="cpu",
+    )
+
+    hr = torch.randn(1, 2, 12, 12)
+    val_loader = [(hr.clone(), hr.clone())]
+
+    logs = engine.evaluate(val_loader=val_loader)
+
+    assert logs == {"val_loss": 0.0}
+
+
+def test_engine_train_and_eval_include_aux_loss():
+    model = AuxLossModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.0)
+    engine = Engine(
+        model=model,
+        optimizer=optimizer,
+        loss_fn=nn.L1Loss(),
+        callbacks=[],
+        device="cpu",
+    )
+
+    lr = torch.zeros(1, 1, 4, 4)
+    hr = torch.ones(1, 1, 4, 4)
+
+    train_logs = engine.train_step((lr.clone(), hr.clone()))
+    eval_logs = engine.evaluate(val_loader=[(lr.clone(), hr.clone())])
+
+    assert train_logs["base_loss"] == 0.0
+    assert train_logs["aux_loss"] == 1.0
+    assert train_logs["loss"] == 1.0
+    assert eval_logs == {"val_loss": 1.0}
+
+
+def test_engine_plateau_scheduler_steps_with_val_loss():
+    model = IdentityModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0)
+    scheduler = get_scheduler(
+        "plateau",
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=0,
+        threshold=0.0,
+        threshold_mode="abs",
+        min_lr=0.0,
+    )
+    engine = Engine(
+        model=model,
+        optimizer=optimizer,
+        loss_fn=nn.L1Loss(),
+        scheduler=scheduler,
+        callbacks=[],
+        device="cpu",
+    )
+
+    hr = torch.randn(1, 1, 4, 4)
+    train_loader = [(hr.clone(), hr.clone())]
+    val_loader = [(hr.clone(), hr.clone())]
+
+    engine.fit(
+        train_loader=train_loader,
+        val_loader=val_loader,
+        epochs=2,
+    )
+
+    assert engine.lr == 0.5

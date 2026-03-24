@@ -1,78 +1,62 @@
-"""
-模型注册机制
+"""模型注册机制。"""
 
-提供装饰器方式的模型注册，避免 if-elif 链。
-添加新模型只需在模型文件中加装饰器，无需修改 __init__.py。
-"""
+from dataclasses import dataclass, field
+from importlib import import_module
+from typing import Any, Callable, Dict, Optional
 
-from typing import Callable, Dict, Any, Optional
-from dataclasses import dataclass
-
-
-# 工厂函数类型别名
 ModelFactory = Callable[[dict, int, int], Dict[str, Any]]
-# 参数: (model_params, in_dim, upscale)
-# 返回: {"model": model, "model_name": str}
 
 
 @dataclass
 class ModelInfo:
-    """注册模型的信息"""
     name: str
     factory: Optional[ModelFactory] = None
-    default_params: dict = None
+    default_params: Dict[str, Any] = field(default_factory=dict)
 
 
-# 全局注册表
 MODEL_REGISTRY: Dict[str, ModelInfo] = {}
+OPTIONAL_MODEL_IMPORT_ERRORS: Dict[str, ImportError] = {}
+_BUILTIN_MODELS_REGISTERED = False
 
 
-def register_model(name: str, default_params: dict = None):
-    """
-    注册单参数模型的装饰器。
+def register_model(name: str, default_params: Optional[Dict[str, Any]] = None):
+    """注册模型的装饰器。"""
 
-    Args:
-        name: 模型名称（如 "EDSR", "RCAN"）
-        default_params: 默认参数字典
-
-    Usage:
-        @register_model("EDSR", default_params={"n_feats": 64, "n_resblocks": 16})
-        def create_edsr(params, in_dim, upscale):
-            ...
-
-    Returns:
-        装饰器函数
-    """
     def decorator(factory: ModelFactory):
-        MODEL_REGISTRY[name] = ModelInfo(
-            name=name,
-            factory=factory,
-            default_params=default_params or {}
-        )
+        MODEL_REGISTRY[name] = ModelInfo(name=name, factory=factory, default_params=default_params or {})
         return factory
+
     return decorator
 
 
+def _import_optional_module(module_name: str, model_name: str) -> None:
+    try:
+        import_module(f"{__package__}.{module_name}")
+    except ImportError as exc:
+        OPTIONAL_MODEL_IMPORT_ERRORS[model_name] = exc
+
+
+def ensure_builtin_models_registered() -> None:
+    global _BUILTIN_MODELS_REGISTERED
+    if _BUILTIN_MODELS_REGISTERED:
+        return
+
+    for module_name in ("bicubic", "edsr", "mysr", "mysrab", "rcan", "rdn"):
+        import_module(f"{__package__}.{module_name}")
+
+    _import_optional_module("swinir", "SwinIR")
+    _import_optional_module("atd", "ATD")
+    _import_optional_module("camixer", "CAMixer")
+    _BUILTIN_MODELS_REGISTERED = True
+
+
 def get_model_info(name: str) -> ModelInfo:
-    """
-    从注册表获取模型信息。
-
-    Args:
-        name: 模型名称
-
-    Returns:
-        ModelInfo 实例
-
-    Raises:
-        ValueError: 模型未注册
-    """
+    ensure_builtin_models_registered()
     if name not in MODEL_REGISTRY:
-        raise ValueError(
-            f"模型 '{name}' 未注册。可用模型: {list(MODEL_REGISTRY.keys())}"
-        )
+        raise ValueError(f"模型 '{name}' 未注册。可用模型: {list(MODEL_REGISTRY.keys())}")
     return MODEL_REGISTRY[name]
 
 
-def list_models() -> list:
-    """列出所有已注册模型"""
+def list_models() -> list[str]:
+    ensure_builtin_models_registered()
     return list(MODEL_REGISTRY.keys())

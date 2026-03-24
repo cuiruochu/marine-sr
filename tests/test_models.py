@@ -4,79 +4,30 @@
 测试所有模型的前向传播、输出 shape、输入通道等。
 """
 
-import pytest
-import torch
-import sys
 from importlib.util import find_spec
 
-from src.core import normalize_model_output
+import pytest
+import torch
 
+from src.core import normalize_model_output
+from src.models.base import merge_params
+from src.models.registry import get_model_info, list_models
 
 # 在导入模型前检查依赖
+
 def _check_deps():
     """检查可选依赖是否安装"""
-    deps = {"ATD": True, "CAMixer": True}
-
-    try:
-        import fairscale
-    except ImportError:
-        deps["ATD"] = False
-
-    try:
-        if find_spec("torchvision") is None:
-            raise ImportError
-    except ImportError:
-        deps["CAMixer"] = False
-
-    return deps
+    return {
+        "ATD": find_spec("fairscale") is not None,
+        "CAMixer": find_spec("torchvision") is not None,
+    }
 
 
 _DEPS = _check_deps()
 
 
-# 条件导入模型
-def _import_models():
-    """导入模型模块，跳过不可用的模型"""
-    # 先导入不依赖外部包的模块
-    from src.models.registry import list_models, get_model_info, MODEL_REGISTRY
-    from src.models.base import create_model_result, merge_params
-
-    # 注册基础模型（这些不依赖外部包）
-    from src.models import bicubic  # noqa: F401
-    from src.models import EDSR  # noqa: F401
-    from src.models import RCAN  # noqa: F401
-    from src.models import RDN  # noqa: F401
-    from src.models import MySR  # noqa: F401
-    from src.models import MySRAb  # noqa: F401
-    from src.models import SwinIR  # noqa: F401
-
-    # 条件导入 ATD
-    if _DEPS["ATD"]:
-        try:
-            from src.models import ATD  # noqa: F401
-        except ImportError:
-            _DEPS["ATD"] = False
-
-    # 条件导入 CAMixer（torchvision 兼容性可能影响可用性）
-    if _DEPS["CAMixer"]:
-        try:
-            from src.models import CAMixer  # noqa: F401
-        except ImportError:
-            _DEPS["CAMixer"] = False
-
-    return list_models, get_model_info, create_model_result, merge_params
-
-
-list_models, get_model_info, create_model_result, merge_params = _import_models()
-
-
-# 测试配置
-BATCH_SIZE = 2
-HEIGHT = 32
-WIDTH = 32
-BACKWARD_BATCH_SIZE = 1
-BACKWARD_HEIGHT = 16
-BACKWARD_WIDTH = 16
+# 触发基础模型注册
+list_models()
 
 
 def is_model_available(model_name: str) -> bool:
@@ -90,8 +41,7 @@ def is_model_available(model_name: str) -> bool:
 
 def get_test_models():
     """获取可测试的模型列表"""
-    all_models = list_models()
-    return [m for m in all_models if is_model_available(m)]
+    return [model_name for model_name in list_models() if is_model_available(model_name)]
 
 
 class TestModelRegistry:
@@ -102,7 +52,6 @@ class TestModelRegistry:
         models = list_models()
         assert isinstance(models, list)
         assert len(models) > 0
-        # 核心模型应该在列表中
         assert "EDSR" in models
         assert "RCAN" in models
         assert "RDN" in models
@@ -129,7 +78,6 @@ class TestModelForward:
         """测试单通道输入前向传播"""
         info = get_model_info(model_name)
 
-        # Bicubic 返回 None，跳过
         if model_name == "Bicubic":
             pytest.skip("Bicubic has no model")
 
@@ -138,23 +86,17 @@ class TestModelForward:
         upscale = 2
 
         result = info.factory(params, in_dim, upscale)
-
-        assert "model" in result
-        assert "model_name" in result
-
         model = result["model"]
         model.eval()
 
-        # 前向传播
-        x = torch.randn(BATCH_SIZE, in_dim, HEIGHT, WIDTH)
+        x = torch.randn(2, in_dim, 32, 32)
         with torch.no_grad():
             y = model(x)
 
-        # 检查输出 shape
-        assert y.shape[0] == BATCH_SIZE
+        assert y.shape[0] == 2
         assert y.shape[1] == in_dim
-        assert y.shape[2] == HEIGHT * upscale
-        assert y.shape[3] == WIDTH * upscale
+        assert y.shape[2] == 64
+        assert y.shape[3] == 64
 
 
 class TestModelBackward:
@@ -175,13 +117,8 @@ class TestModelBackward:
         model = result["model"]
         model.train()
 
-        x = torch.randn(BACKWARD_BATCH_SIZE, in_dim, BACKWARD_HEIGHT, BACKWARD_WIDTH)
-        target = torch.randn(
-            BACKWARD_BATCH_SIZE,
-            in_dim,
-            BACKWARD_HEIGHT * upscale,
-            BACKWARD_WIDTH * upscale,
-        )
+        x = torch.randn(1, in_dim, 16, 16)
+        target = torch.randn(1, in_dim, 32, 32)
 
         output = normalize_model_output(model(x))
         y = output.pred
@@ -211,16 +148,14 @@ class TestModelBackward:
         model = result["model"]
         model.eval()
 
-        # 前向传播
-        x = torch.randn(BATCH_SIZE, in_dim, HEIGHT, WIDTH)
+        x = torch.randn(2, in_dim, 32, 32)
         with torch.no_grad():
             y = model(x)
 
-        # 检查输出 shape
-        assert y.shape[0] == BATCH_SIZE
+        assert y.shape[0] == 2
         assert y.shape[1] == in_dim
-        assert y.shape[2] == HEIGHT * upscale
-        assert y.shape[3] == WIDTH * upscale
+        assert y.shape[2] == 64
+        assert y.shape[3] == 64
 
 
 class TestModelUpscale:
@@ -232,18 +167,17 @@ class TestModelUpscale:
         """测试不同 upscale 输出 shape 正确"""
         info = get_model_info(model_name)
         params = merge_params(info.default_params or {}, {})
-        in_dim = 1
 
-        result = info.factory(params, in_dim, upscale)
+        result = info.factory(params, 1, upscale)
         model = result["model"]
         model.eval()
 
-        x = torch.randn(BATCH_SIZE, in_dim, HEIGHT, WIDTH)
+        x = torch.randn(2, 1, 32, 32)
         with torch.no_grad():
             y = model(x)
 
-        assert y.shape[2] == HEIGHT * upscale
-        assert y.shape[3] == WIDTH * upscale
+        assert y.shape[2] == 32 * upscale
+        assert y.shape[3] == 32 * upscale
 
 
 class TestModelParams:
@@ -257,9 +191,8 @@ class TestModelParams:
         result = info.factory(params, 1, 2)
         model_name = result["model_name"]
 
-        # 模型名应包含默认参数
-        assert "f64" in model_name  # n_feats=64
-        assert "n16" in model_name  # n_resblocks=16
+        assert "f64" in model_name
+        assert "n16" in model_name
 
     def test_custom_params(self):
         """测试自定义参数覆盖默认值"""
@@ -270,7 +203,6 @@ class TestModelParams:
         result = info.factory(params, 1, 2)
         model_name = result["model_name"]
 
-        # 模型名应包含自定义参数
         assert "f128" in model_name
         assert "n8" in model_name
 
@@ -278,10 +210,7 @@ class TestModelParams:
 class TestModelSkip:
     """跳过需要额外依赖的模型测试"""
 
-    @pytest.mark.skipif(
-        not is_model_available("ATD"),
-        reason="fairscale not installed"
-    )
+    @pytest.mark.skipif(not is_model_available("ATD"), reason="fairscale not installed")
     def test_atd_available(self):
         """ATD 模型可用时运行"""
         info = get_model_info("ATD")
@@ -289,10 +218,7 @@ class TestModelSkip:
         result = info.factory(params, 1, 2)
         assert result["model"] is not None
 
-    @pytest.mark.skipif(
-        not is_model_available("CAMixer"),
-        reason="torchvision not installed"
-    )
+    @pytest.mark.skipif(not is_model_available("CAMixer"), reason="torchvision not installed")
     def test_camixer_available(self):
         """CAMixer 模型可用时运行"""
         info = get_model_info("CAMixer")
