@@ -9,6 +9,13 @@ from importlib.util import find_spec
 import pytest
 import torch
 
+if find_spec("torchvision") is not None:
+    from torchvision.transforms import InterpolationMode
+    from torchvision.transforms.functional import resize
+else:
+    InterpolationMode = None
+    resize = None
+
 from src.core import normalize_model_output
 from src.models.base import merge_params
 from src.models.registry import get_model_info, list_models
@@ -17,9 +24,11 @@ from src.models.registry import get_model_info, list_models
 
 def _check_deps():
     """检查可选依赖是否安装"""
+    has_torchvision = find_spec("torchvision") is not None
     return {
-        "ATD": find_spec("fairscale") is not None,
-        "CAMixer": find_spec("torchvision") is not None,
+        "atd": find_spec("fairscale") is not None,
+        "camixer": has_torchvision,
+        "bicubic": has_torchvision,
     }
 
 
@@ -32,10 +41,10 @@ list_models()
 
 def is_model_available(model_name: str) -> bool:
     """检查模型是否可用（依赖是否安装）"""
-    if model_name == "ATD":
-        return _DEPS.get("ATD", False)
-    if model_name == "CAMixer":
-        return _DEPS.get("CAMixer", False)
+    if model_name == "atd":
+        return _DEPS.get("atd", False)
+    if model_name in {"camixer", "bicubic"}:
+        return _DEPS.get(model_name, False)
     return True
 
 
@@ -52,14 +61,15 @@ class TestModelRegistry:
         models = list_models()
         assert isinstance(models, list)
         assert len(models) > 0
-        assert "EDSR" in models
-        assert "RCAN" in models
-        assert "RDN" in models
+        assert "bicubic" in models
+        assert "edsr" in models
+        assert "rcan" in models
+        assert "rdn" in models
 
     def test_get_model_info(self):
         """测试 get_model_info 返回正确信息"""
-        info = get_model_info("EDSR")
-        assert info.name == "EDSR"
+        info = get_model_info("edsr")
+        assert info.name == "edsr"
         assert info.factory is not None
         assert info.default_params is not None
         assert "n_feats" in info.default_params
@@ -77,9 +87,6 @@ class TestModelForward:
     def test_model_forward_in_dim_1(self, model_name):
         """测试单通道输入前向传播"""
         info = get_model_info(model_name)
-
-        if model_name == "Bicubic":
-            pytest.skip("Bicubic has no model")
 
         params = merge_params(info.default_params or {}, {})
         in_dim = 1
@@ -106,8 +113,8 @@ class TestModelBackward:
     @pytest.mark.parametrize("in_dim", [1, 2])
     def test_model_backward(self, model_name, in_dim):
         """测试模型可用假数据完成前向和反向传播"""
-        if model_name == "Bicubic":
-            pytest.skip("Bicubic has no trainable model")
+        if model_name == "bicubic":
+            pytest.skip("Bicubic is evaluation-only baseline")
 
         info = get_model_info(model_name)
         params = merge_params(info.default_params or {}, {})
@@ -137,9 +144,6 @@ class TestModelBackward:
         """测试双通道输入前向传播（模拟 MWD）"""
         info = get_model_info(model_name)
 
-        if model_name == "Bicubic":
-            pytest.skip("Bicubic has no model")
-
         params = merge_params(info.default_params or {}, {})
         in_dim = 2
         upscale = 2
@@ -162,7 +166,7 @@ class TestModelUpscale:
     """测试不同放大倍数"""
 
     @pytest.mark.parametrize("upscale", [2, 4])
-    @pytest.mark.parametrize("model_name", ["EDSR", "RCAN", "RDN", "MySR"])
+    @pytest.mark.parametrize("model_name", ["edsr", "rcan", "rdn", "mysr"])
     def test_model_upscale(self, model_name, upscale):
         """测试不同 upscale 输出 shape 正确"""
         info = get_model_info(model_name)
@@ -185,7 +189,7 @@ class TestModelParams:
 
     def test_default_params(self):
         """测试默认参数被正确使用"""
-        info = get_model_info("EDSR")
+        info = get_model_info("edsr")
         params = merge_params(info.default_params, {})
 
         result = info.factory(params, 1, 2)
@@ -196,7 +200,7 @@ class TestModelParams:
 
     def test_custom_params(self):
         """测试自定义参数覆盖默认值"""
-        info = get_model_info("EDSR")
+        info = get_model_info("edsr")
         custom_params = {"n_feats": 128, "n_resblocks": 8}
         params = merge_params(info.default_params, custom_params)
 
@@ -207,21 +211,49 @@ class TestModelParams:
         assert "n8" in model_name
 
 
+class TestBicubic:
+    @pytest.mark.skipif(not is_model_available("bicubic"), reason="torchvision not installed")
+    def test_bicubic_matches_torchvision_resize(self):
+        info = get_model_info("bicubic")
+        result = info.factory({}, 2, 4)
+        model = result["model"]
+        model.eval()
+
+        x = torch.randn(2, 2, 5, 7)
+        with torch.no_grad():
+            y = model(x)
+
+        expected = resize(
+            x,
+            size=[20, 28],
+            interpolation=InterpolationMode.BICUBIC,
+            antialias=True,
+        )
+        assert torch.allclose(y, expected)
+
+    def test_bicubic_has_no_trainable_parameters(self):
+        info = get_model_info("bicubic")
+        result = info.factory({}, 1, 2)
+        model = result["model"]
+
+        assert sum(param.numel() for param in model.parameters()) == 0
+
+
 class TestModelSkip:
     """跳过需要额外依赖的模型测试"""
 
-    @pytest.mark.skipif(not is_model_available("ATD"), reason="fairscale not installed")
+    @pytest.mark.skipif(not is_model_available("atd"), reason="fairscale not installed")
     def test_atd_available(self):
         """ATD 模型可用时运行"""
-        info = get_model_info("ATD")
+        info = get_model_info("atd")
         params = merge_params(info.default_params or {}, {})
         result = info.factory(params, 1, 2)
         assert result["model"] is not None
 
-    @pytest.mark.skipif(not is_model_available("CAMixer"), reason="torchvision not installed")
+    @pytest.mark.skipif(not is_model_available("camixer"), reason="torchvision not installed")
     def test_camixer_available(self):
         """CAMixer 模型可用时运行"""
-        info = get_model_info("CAMixer")
+        info = get_model_info("camixer")
         params = merge_params(info.default_params or {}, {})
         result = info.factory(params, 1, 2)
         assert result["model"] is not None

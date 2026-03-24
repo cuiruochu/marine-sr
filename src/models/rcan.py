@@ -119,7 +119,7 @@ RCAN_DEFAULT_PARAMS = {
 }
 
 
-@register_model("RCAN", default_params=RCAN_DEFAULT_PARAMS)
+@register_model("rcan", default_params=RCAN_DEFAULT_PARAMS)
 def create_rcan_single(params: dict, in_dim: int, upscale: int):
     """单参数 RCAN 模型工厂"""
     p = merge_params(RCAN_DEFAULT_PARAMS, params)
@@ -134,5 +134,5 @@ def create_rcan_single(params: dict, in_dim: int, upscale: int):
         reduction=p["reduction"]
     )
 
-    model_name = f"RCAN_f{p['n_feats']}_n{p['n_resgroups'] * p['n_resblocks']}_x{upscale}"
+    model_name = f"rcan_f{p['n_feats']}_n{p['n_resgroups'] * p['n_resblocks']}_x{upscale}"
     return create_model_result(model, model_name)

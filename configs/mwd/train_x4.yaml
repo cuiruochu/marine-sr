@@ -24,7 +24,7 @@ dataset:
   max_sample: 10
 
 train:
-  epochs: 200
+  epochs: 100
   batch_size: 16
   num_workers: 8
   val_num_workers: 4

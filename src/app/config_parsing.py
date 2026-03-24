@@ -27,6 +27,7 @@ from src.app.config_types import (
     WandbConfig,
 )
 from src.app.config_validation import validate_evaluate_config, validate_infer_config, validate_train_config
+from src.models.registry import normalize_model_name
 
 
 def load_train_config(raw_cfg: DictConfig | Mapping[str, Any]) -> TrainAppConfig:
@@ -152,7 +153,7 @@ def _parse_models_config(cfg_dict: Mapping[str, Any]) -> ModelConfig:
     if section is None:
         raise KeyError("缺少 models 配置段")
     return ModelConfig(
-        name=str(section["name"]),
+        name=normalize_model_name(section["name"]),
         in_dim=int(section["in_dim"]) if section.get("in_dim") is not None else None,
         params=dict(section.get("params", {})),
     )

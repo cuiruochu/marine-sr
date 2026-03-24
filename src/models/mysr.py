@@ -134,7 +134,7 @@ MYSR_DEFAULT_PARAMS = {
 }
 
 
-@register_model("MySR", default_params=MYSR_DEFAULT_PARAMS)
+@register_model("mysr", default_params=MYSR_DEFAULT_PARAMS)
 def create_mysr_single(params: dict, in_dim: int, upscale: int):
     """单参数 MySR 模型工厂"""
     p = merge_params(MYSR_DEFAULT_PARAMS, params)
@@ -146,5 +146,5 @@ def create_mysr_single(params: dict, in_dim: int, upscale: int):
         n_blocks=p["n_blocks"]
     )
 
-    model_name = f"MySR_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
+    model_name = f"mysr_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
     return create_model_result(model, model_name)

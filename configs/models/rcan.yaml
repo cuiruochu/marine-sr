@@ -1,5 +1,5 @@
-# RCAN 模型配置
-name: RCAN
+# rcan 模型配置
+name: rcan
 params:
   n_feats: 64
   n_resgroups: 3

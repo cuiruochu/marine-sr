@@ -1,5 +1,5 @@
-# CAMixer 模型配置
-name: CAMixer
+# camixer 模型配置
+name: camixer
 params:
   n_feats: 60
   ratio: 0.5

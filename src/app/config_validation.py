@@ -12,7 +12,7 @@ from src.optim.scheduler import list_schedulers
 
 
 def validate_train_config(cfg: TrainAppConfig) -> None:
-    _validate_model_name(cfg.models.name)
+    _validate_train_model_name(cfg.models.name)
     _validate_model_in_dim(cfg.models.in_dim)
     _validate_data_norm("data_norm", cfg.data_norm)
     _validate_dataset_common("dataset", cfg.dataset.name)
@@ -91,6 +91,12 @@ def validate_infer_config(cfg: InferAppConfig) -> None:
 
 def _validate_model_name(name: str) -> None:
     _validate_choice("models.name", name, list_models())
+
+
+def _validate_train_model_name(name: str) -> None:
+    _validate_model_name(name)
+    if name == "bicubic":
+        raise ValueError("bicubic 只支持评估和推理，不支持训练")
 
 
 def _validate_model_in_dim(value: int | None) -> None:

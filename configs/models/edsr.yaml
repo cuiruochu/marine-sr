@@ -1,5 +1,5 @@
-# EDSR 模型配置
-name: EDSR
+# edsr 模型配置
+name: edsr
 params:
   n_feats: 64
   n_resblocks: 16

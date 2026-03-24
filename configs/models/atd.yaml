@@ -1,5 +1,5 @@
-# ATD 模型配置
-name: ATD
+# atd 模型配置
+name: atd
 params:
   embed_dim: 48
   patch_size: 1

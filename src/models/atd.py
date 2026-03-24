@@ -1210,7 +1210,7 @@ ATD_DEFAULT_PARAMS = {
 }
 
 
-@register_model("ATD", default_params=ATD_DEFAULT_PARAMS)
+@register_model("atd", default_params=ATD_DEFAULT_PARAMS)
 def create_atd_single(params: dict, in_dim: int, upscale: int):
     """单参数 ATD 模型工厂"""
     p = merge_params(ATD_DEFAULT_PARAMS, params)
@@ -1232,5 +1232,5 @@ def create_atd_single(params: dict, in_dim: int, upscale: int):
         upsampler='pixelshuffledirect'
     )
 
-    model_name = f"ATD_f{p['embed_dim']}_n{len(p['depths'])}_patch{p['patch_size']}_window{p['window_size']}_x{upscale}"
+    model_name = f"atd_f{p['embed_dim']}_n{len(p['depths'])}_patch{p['patch_size']}_window{p['window_size']}_x{upscale}"
     return create_model_result(model, model_name)

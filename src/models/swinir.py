@@ -906,7 +906,7 @@ SWINIR_DEFAULT_PARAMS = {
 }
 
 
-@register_model("SwinIR", default_params=SWINIR_DEFAULT_PARAMS)
+@register_model("swinir", default_params=SWINIR_DEFAULT_PARAMS)
 def create_swinir_single(params: dict, in_dim: int, upscale: int):
     """单参数 SwinIR 模型工厂"""
     p = merge_params(SWINIR_DEFAULT_PARAMS, params)
@@ -925,5 +925,5 @@ def create_swinir_single(params: dict, in_dim: int, upscale: int):
         resi_connection="1conv",
     )
 
-    model_name = f"SwinIR_f{p['embed_dim']}_n{len(p['depths'])}_patch{p['patch_size']}_window{p['window_size']}_x{upscale}"
+    model_name = f"swinir_f{p['embed_dim']}_n{len(p['depths'])}_patch{p['patch_size']}_window{p['window_size']}_x{upscale}"
     return create_model_result(model, model_name)

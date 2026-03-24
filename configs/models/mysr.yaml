@@ -1,5 +1,5 @@
-# MySR 模型配置
-name: MySR
+# mysr 模型配置
+name: mysr
 params:
   num_features: 64
   n_blocks: 5

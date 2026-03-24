@@ -55,7 +55,7 @@ uv run python -c "import torch; print(torch.__version__); print(torch.version.cu
 
 ```yaml
 # configs/models/edsr.yaml
-name: EDSR
+name: edsr
 params:
   n_feats: 64
   n_resblocks: 16

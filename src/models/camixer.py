@@ -545,7 +545,7 @@ CAMIXER_DEFAULT_PARAMS = {
 }
 
 
-@register_model("CAMixer", default_params=CAMIXER_DEFAULT_PARAMS)
+@register_model("camixer", default_params=CAMIXER_DEFAULT_PARAMS)
 def create_camixer_single(params: dict, in_dim: int, upscale: int):
     """单参数 CAMixer 模型工厂"""
     p = merge_params(CAMIXER_DEFAULT_PARAMS, params)
@@ -559,5 +559,5 @@ def create_camixer_single(params: dict, in_dim: int, upscale: int):
         n_group=p["n_group"]
     )
 
-    model_name = f"CAMixer_f{p['n_feats']}_ratio{p['ratio']}_x{upscale}"
+    model_name = f"camixer_f{p['n_feats']}_ratio{p['ratio']}_x{upscale}"
     return create_model_result(model, model_name)

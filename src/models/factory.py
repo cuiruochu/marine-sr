@@ -1,11 +1,11 @@
 """模型工厂。"""
 
 from .base import merge_params
-from .registry import OPTIONAL_MODEL_IMPORT_ERRORS, get_model_info
+from .registry import OPTIONAL_MODEL_IMPORT_ERRORS, get_model_info, normalize_model_name
 
 
 def create_model(config):
-    model_name = config.model_name
+    model_name = normalize_model_name(config.model_name)
     model_params = getattr(config, "model_params", {}) or {}
     upscale = int(getattr(config, "upscale"))
     in_dim = int(getattr(config, "in_dim"))

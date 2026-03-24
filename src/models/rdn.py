@@ -110,7 +110,7 @@ RDN_DEFAULT_PARAMS = {
 }
 
 
-@register_model("RDN", default_params=RDN_DEFAULT_PARAMS)
+@register_model("rdn", default_params=RDN_DEFAULT_PARAMS)
 def create_rdn_single(params: dict, in_dim: int, upscale: int):
     """单参数 RDN 模型工厂"""
     p = merge_params(RDN_DEFAULT_PARAMS, params)
@@ -123,6 +123,6 @@ def create_rdn_single(params: dict, in_dim: int, upscale: int):
         layers=p["layers"]
     )
 
-    model_name = f"RDN_f{p['n_features']}_n{p['n_blocks'] * p['layers']}_x{upscale}"
+    model_name = f"rdn_f{p['n_features']}_n{p['n_blocks'] * p['layers']}_x{upscale}"
     return create_model_result(model, model_name)
 

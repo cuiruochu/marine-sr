@@ -146,7 +146,7 @@ MYSRAB2_DEFAULT_PARAMS = {
 }
 
 
-@register_model("MySRAb1", default_params=MYSRAB1_DEFAULT_PARAMS)
+@register_model("mysrab1", default_params=MYSRAB1_DEFAULT_PARAMS)
 def create_mysrab1_single(params: dict, in_dim: int, upscale: int):
     """单参数 MySRAb1 模型工厂"""
     p = merge_params(MYSRAB1_DEFAULT_PARAMS, params)
@@ -158,11 +158,11 @@ def create_mysrab1_single(params: dict, in_dim: int, upscale: int):
         n_blocks=p["n_blocks"]
     )
 
-    model_name = f"MySRAb1_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
+    model_name = f"mysrab1_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
     return create_model_result(model, model_name)
 
 
-@register_model("MySRAb2", default_params=MYSRAB2_DEFAULT_PARAMS)
+@register_model("mysrab2", default_params=MYSRAB2_DEFAULT_PARAMS)
 def create_mysrab2_single(params: dict, in_dim: int, upscale: int):
     """单参数 MySRAb2 模型工厂"""
     p = merge_params(MYSRAB2_DEFAULT_PARAMS, params)
@@ -174,6 +174,6 @@ def create_mysrab2_single(params: dict, in_dim: int, upscale: int):
         n_blocks=p["n_blocks"]
     )
 
-    model_name = f"MySRAb2_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
+    model_name = f"mysrab2_f{p['num_features']}_n{p['n_blocks']}_x{upscale}"
     return create_model_result(model, model_name)
 

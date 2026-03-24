@@ -14,11 +14,11 @@
 #
 # 示例：
 # ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rcan"]
-# ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=swinir", "resume.checkpoint='checkpoints/SwinIR/mwd/x4/best.pth'"]
+# ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=swinir", "resume.checkpoint='checkpoints/swinir/mwd/x4/best.pth'"]
 # ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=edsr", "train.lr=1e-4"]
 
 # ====================
-# EDSR
+# edsr
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=edsr"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=edsr"]
@@ -30,7 +30,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=edsr"]
 
 # ====================
-# RCAN
+# rcan
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rcan"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=rcan"]
@@ -42,7 +42,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=rcan"]
 
 # ====================
-# RDN
+# rdn
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rdn"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=rdn"]
@@ -54,9 +54,9 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=rdn"]
 
 # ====================
-# SwinIR
+# swinir
 # ====================
-["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=swinir", "resume.checkpoint='checkpoints/SwinIR/wind/x2/best.pth'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=swinir", "resume.checkpoint='checkpoints/swinir/wind/x2/best.pth'"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=swinir"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=swinir"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=swinir"]
@@ -66,7 +66,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=swinir"]
 
 # ====================
-# MySR
+# mysr
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=mysr"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=mysr"]
@@ -78,7 +78,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=mysr"]
 
 # ====================
-# MySRAb1
+# mysrab1
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=mysrab1"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=mysrab1"]
@@ -90,7 +90,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=mysrab1"]
 
 # ====================
-# MySRAb2
+# mysrab2
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=mysrab2"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=mysrab2"]
@@ -102,7 +102,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=mysrab2"]
 
 # ====================
-# ATD
+# atd
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=atd"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=atd"]
@@ -114,7 +114,7 @@
 ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=atd"]
 
 # ====================
-# CAMixer
+# camixer
 # ====================
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=camixer"]
 ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=camixer"]

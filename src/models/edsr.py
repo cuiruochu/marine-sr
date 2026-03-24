@@ -57,7 +57,7 @@ EDSR_DEFAULT_PARAMS = {
 }
 
 
-@register_model("EDSR", default_params=EDSR_DEFAULT_PARAMS)
+@register_model("edsr", default_params=EDSR_DEFAULT_PARAMS)
 def create_edsr_single(params: dict, in_dim: int, upscale: int):
     """单参数 EDSR 模型工厂"""
     p = merge_params(EDSR_DEFAULT_PARAMS, params)
@@ -70,6 +70,6 @@ def create_edsr_single(params: dict, in_dim: int, upscale: int):
         res_scale=p["res_scale"]
     )
 
-    model_name = f"EDSR_f{p['n_feats']}_n{p['n_resblocks']}_x{upscale}"
+    model_name = f"edsr_f{p['n_feats']}_n{p['n_resblocks']}_x{upscale}"
     return create_model_result(model, model_name)
 

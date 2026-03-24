@@ -24,15 +24,18 @@ def run_eval_task(raw_cfg: DictConfig | EvalTaskConfig):
     init_task_logger("evaluate.log" if cfg.mode == "evaluation" else "infer.log")
 
     checkpoint = cfg.checkpoint
-    if not checkpoint:
-        raise ValueError("必须指定检查点路径: checkpoint=./path/to/checkpoint.pth")
+    requires_checkpoint = cfg.models.name != "bicubic"
+    checkpoint_path = None
+    if requires_checkpoint:
+        if not checkpoint:
+            raise ValueError("必须指定检查点路径: checkpoint=./path/to/checkpoint.pth")
+
+        checkpoint_path = resolve_project_path(checkpoint)
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"检查点文件不存在: {checkpoint_path}")
+        validate_checkpoint_matches_config(cfg, checkpoint_path)
 
     validate_eval_runtime_inputs(cfg)
-
-    checkpoint_path = resolve_project_path(checkpoint)
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f"检查点文件不存在: {checkpoint_path}")
-    validate_checkpoint_matches_config(cfg, checkpoint_path)
 
     _log_evaluation_configuration(logger, cfg)
 
@@ -46,8 +49,11 @@ def run_eval_task(raw_cfg: DictConfig | EvalTaskConfig):
         logger.info(f"  结果保存目录: {cfg.results_root}")
 
     evaluator = Evaluator(model=model, callbacks=callbacks)
-    logger.info(f"加载检查点: {checkpoint}")
-    evaluator.load_checkpoint(str(checkpoint_path))
+    if checkpoint_path is not None:
+        logger.info(f"加载检查点: {checkpoint}")
+        evaluator.load_checkpoint(str(checkpoint_path))
+    else:
+        logger.info("bicubic 基线运行，跳过检查点加载")
 
     logger.info("创建推理/评估数据加载器...")
     test_loader = build_test_loader(cfg)

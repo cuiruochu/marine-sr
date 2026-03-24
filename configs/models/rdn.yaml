@@ -1,5 +1,5 @@
-# RDN 模型配置
-name: RDN
+# rdn 模型配置
+name: rdn
 params:
   n_features: 64
   n_blocks: 6

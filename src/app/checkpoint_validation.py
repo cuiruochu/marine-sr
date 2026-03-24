@@ -6,6 +6,7 @@ from typing import Any, Mapping
 import torch
 
 from src.app.config_types import EvalTaskConfig, TrainAppConfig
+from src.models.registry import normalize_model_name
 
 
 def validate_checkpoint_matches_config(
@@ -43,7 +44,7 @@ def _extract_checkpoint_signature(config: Any) -> dict[str, Any] | None:
         return None
 
     signature = {
-        "models.name": model_section.get("name"),
+        "models.name": normalize_model_name(model_section.get("name")),
         "models.in_dim": model_section.get("in_dim"),
         "models.params": dict(model_section.get("params", {})),
         "upscale": config.get("upscale", dataset_section.get("upscale")),
@@ -53,7 +54,7 @@ def _extract_checkpoint_signature(config: Any) -> dict[str, Any] | None:
 
 def _build_current_signature(cfg: TrainAppConfig | EvalTaskConfig) -> dict[str, Any]:
     return {
-        "models.name": cfg.models.name,
+        "models.name": normalize_model_name(cfg.models.name),
         "models.in_dim": cfg.models.in_dim,
         "models.params": dict(cfg.models.params),
         "upscale": cfg.upscale,

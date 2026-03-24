@@ -13,7 +13,12 @@ from src.utils.logging import configure_logging
 
 def build_config_snapshot(raw_cfg: DictConfig | Any, cfg: Any) -> dict[str, Any]:
     if isinstance(raw_cfg, DictConfig):
-        return OmegaConf.to_container(raw_cfg, resolve=True)
+        snapshot = OmegaConf.to_container(raw_cfg, resolve=True)
+        if isinstance(snapshot, dict):
+            models = snapshot.get("models")
+            if isinstance(models, dict) and isinstance(models.get("name"), str):
+                models["name"] = models["name"].lower()
+        return snapshot
     return asdict(cfg)
 
 

@@ -5,10 +5,15 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+from hydra import compose, initialize_config_dir
 
+from src.app.config_parsing import load_evaluate_config
+from src.app.eval import run_eval_task
 from src.callbacks.save_results import SaveResultsCallback
 from src.core.callbacks import Callback
 from src.core.evaluator import Evaluator
+
+CONFIG_DIR = str((Path(__file__).resolve().parents[1] / "configs").resolve())
 
 
 class IdentityModel(nn.Module):
@@ -20,6 +25,11 @@ def _make_test_root() -> Path:
     root = Path.cwd() / ".test-artifacts" / f"evaluator-{uuid.uuid4().hex}"
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def _compose(config_name: str):
+    with initialize_config_dir(version_base=None, config_dir=CONFIG_DIR):
+        return compose(config_name=config_name)
 
 
 def test_evaluator_supports_masked_multi_channel_metrics_and_masked_save():
@@ -154,3 +164,46 @@ def test_evaluator_passes_per_sample_metric_tensors_to_callbacks():
     for values in batch_metrics.values():
         assert isinstance(values, torch.Tensor)
         assert values.shape == (2,)
+
+
+def test_run_eval_task_skips_checkpoint_loading_for_bicubic(monkeypatch):
+    raw_cfg = _compose("wind/evaluate_x2")
+    raw_cfg.models.name = "Bicubic"
+    raw_cfg.evaluate.checkpoint = None
+    cfg = load_evaluate_config(raw_cfg)
+
+    class StubEvaluator:
+        instance = None
+
+        def __init__(self, model, callbacks, device=None):
+            del device
+            self.model = model
+            self.callbacks = callbacks
+            self.loaded_checkpoint = None
+            self.run_kwargs = None
+            StubEvaluator.instance = self
+
+        def load_checkpoint(self, path):
+            self.loaded_checkpoint = path
+
+        def run(self, **kwargs):
+            self.run_kwargs = kwargs
+            return {}
+
+    monkeypatch.setattr("src.app.eval.init_task_logger", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.app.eval.validate_eval_runtime_inputs", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.app.eval.validate_checkpoint_matches_config",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not validate checkpoint")),
+    )
+    monkeypatch.setattr("src.app.eval.build_model_bundle", lambda *_args, **_kwargs: {"model": IdentityModel()})
+    monkeypatch.setattr("src.app.eval.build_eval_callbacks", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("src.app.eval.build_test_loader", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("src.app.eval._load_mask", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.app.eval.Evaluator", StubEvaluator)
+
+    run_eval_task(cfg)
+
+    assert StubEvaluator.instance is not None
+    assert StubEvaluator.instance.loaded_checkpoint is None
+    assert StubEvaluator.instance.run_kwargs["mode"] == "evaluation"

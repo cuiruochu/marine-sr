@@ -1,5 +1,5 @@
-# SwinIR 模型配置
-name: SwinIR
+# swinir 模型配置
+name: swinir
 params:
   embed_dim: 60
   patch_size: 1
