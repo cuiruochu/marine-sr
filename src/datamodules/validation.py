@@ -47,7 +47,7 @@ def validate_evaluation_runtime_inputs(cfg: EvaluateAppConfig) -> None:
 
 def validate_inference_runtime_inputs(cfg: InferAppConfig) -> None:
     _validate_data_dir(cfg.test_loader_spec.infer_lr_root, "dataset.infer_lr_root")
-    _validate_mask(cfg.mask, cfg.test_loader_spec.infer_lr_root, field_name="infer.mask", upscale=cfg.dataset.upscale)
+    _validate_mask(cfg.mask, cfg.test_loader_spec.infer_lr_root, field_name="infer.mask", upscale=cfg.upscale)
 
 
 def _validate_data_dir(path: str, field_name: str) -> None:

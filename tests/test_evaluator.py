@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 
 from src.callbacks.save_results import SaveResultsCallback
+from src.core.callbacks import Callback
 from src.core.evaluator import Evaluator
 
 
@@ -92,16 +93,16 @@ def test_evaluator_aggregates_mean_metrics_by_sample_count(monkeypatch):
     ]
 
     def fake_psnr(img1, img2, mask=None):
-        return 10.0 if img1.shape[0] == 2 else 0.0
+        return torch.tensor([10.0, 20.0]) if img1.shape[0] == 2 else torch.tensor([0.0])
 
     def fake_ssim(img1, img2, mask=None):
-        return 0.6 if img1.shape[0] == 2 else 0.0
+        return torch.tensor([0.6, 0.3]) if img1.shape[0] == 2 else torch.tensor([0.0])
 
     def fake_mae(img1, img2, mask=None):
-        return 4.0 if img1.shape[0] == 2 else 1.0
+        return torch.tensor([4.0, 5.0]) if img1.shape[0] == 2 else torch.tensor([1.0])
 
     def fake_max_mae(img1, img2, mask=None):
-        return 7.0 if img1.shape[0] == 2 else 3.0
+        return torch.tensor([7.0, 2.0]) if img1.shape[0] == 2 else torch.tensor([3.0])
 
     monkeypatch.setattr("src.core.evaluator.calculate_psnr", fake_psnr)
     monkeypatch.setattr("src.core.evaluator.calculate_ssim", fake_ssim)
@@ -114,7 +115,42 @@ def test_evaluator_aggregates_mean_metrics_by_sample_count(monkeypatch):
         std=[1.0],
     )
 
-    assert pytest.approx(logs["psnr"], rel=1e-6, abs=1e-6) == 20.0 / 3.0
-    assert pytest.approx(logs["ssim"], rel=1e-6, abs=1e-6) == 0.4
-    assert pytest.approx(logs["mae"], rel=1e-6, abs=1e-6) == 3.0
+    assert pytest.approx(logs["psnr"], rel=1e-6, abs=1e-6) == 10.0
+    assert pytest.approx(logs["ssim"], rel=1e-6, abs=1e-6) == 0.3
+    assert pytest.approx(logs["mae"], rel=1e-6, abs=1e-6) == 10.0 / 3.0
     assert logs["max_mae"] == 7.0
+
+
+def test_evaluator_passes_per_sample_metric_tensors_to_callbacks():
+    class CaptureMetricsCallback(Callback):
+        def __init__(self):
+            self.metrics = []
+
+        def on_batch_end(self, evaluator, batch, logs=None, **kwargs):
+            self.metrics.append(kwargs["metrics"])
+
+    callback = CaptureMetricsCallback()
+    evaluator = Evaluator(model=IdentityModel(), device="cpu", callbacks=[callback])
+
+    hr = torch.tensor(
+        [
+            [[[0.0, 0.0], [0.0, 0.0]]],
+            [[[1.0, 1.0], [1.0, 1.0]]],
+        ]
+    )
+    sr = hr.clone()
+    sr[1] = 0.0
+    loader = [(sr, hr, ["sample_a.npy", "sample_b.npy"])]
+
+    evaluator.run(
+        test_loader=loader,
+        mean=[0.0],
+        std=[1.0],
+    )
+
+    assert len(callback.metrics) == 1
+    batch_metrics = callback.metrics[0]
+    assert set(batch_metrics) == {"psnr", "ssim", "mae", "max_mae"}
+    for values in batch_metrics.values():
+        assert isinstance(values, torch.Tensor)
+        assert values.shape == (2,)

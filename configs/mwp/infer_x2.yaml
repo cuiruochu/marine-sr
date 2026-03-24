@@ -1,0 +1,29 @@
+# @package _global_
+
+defaults:
+  - /models: edsr
+  - _self_
+
+upscale: 2
+
+data_norm:
+  mean: [3.6305425162042853]
+  std: [3.213140657617123]
+
+dataset:
+  name: mwp
+  infer_lr_root: /workspace/dataset/test/mwp/x2/lr
+
+infer:
+  checkpoint: null
+  save_results: true
+  save_dir: ./results
+  mask: /workspace/dataset/test/mwp/x2/mask.npy
+  batch_size: 1
+  num_workers: 4
+
+hydra:
+  run:
+    dir: ./experiments/${now:%Y%m%d_%H%M%S}_infer_${models.name}_${dataset.name}_x${upscale}
+  job:
+    chdir: false

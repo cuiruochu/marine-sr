@@ -1,0 +1,71 @@
+# @package _global_
+
+defaults:
+  - /models: edsr
+  - _self_
+
+models:
+  in_dim: 1
+
+seed: 0
+upscale: 2
+
+data_norm:
+  mean: [3.6305425162042853]
+  std: [3.213140657617123]
+
+dataset:
+  name: mwp
+  lr_patch_size: 30
+  train_lr_root: /workspace/dataset/train/mwp/x2/lr
+  train_hr_root: /workspace/dataset/train/mwp/x2/hr
+  val_lr_root: /workspace/dataset/test/mwp/x2/lr
+  val_hr_root: /workspace/dataset/test/mwp/x2/hr
+  max_sample: 10
+
+train:
+  epochs: 200
+  batch_size: 16
+  num_workers: 8
+  val_num_workers: 4
+  lr: 2e-4
+  optimizer:
+    name: adamw
+    params:
+      betas: [0.9, 0.999]
+      eps: 0.00000001
+      weight_decay: 0.0001
+  scheduler:
+    name: cosine
+    params:
+      T_max: ${train.epochs}
+      eta_min: 0.000001
+  loss:
+    name: l1
+    params: {}
+  checkpoint:
+    every: 20
+    save_best: true
+    monitor: val_loss
+    mode: min
+
+resume:
+  checkpoint: null
+  load_optimizer: true
+  load_scheduler: true
+  load_callbacks: true
+  load_rng_state: true
+
+paths:
+  checkpoint_dir: ./checkpoints
+  experiment_dir: ./experiments
+
+wandb:
+  project: Marine-Parameters-SupervisedSR
+  mode: offline
+
+hydra:
+  run:
+    dir: ${paths.experiment_dir}/${now:%Y%m%d_%H%M%S}_${models.name}_${dataset.name}_x${upscale}
+  job:
+    chdir: false

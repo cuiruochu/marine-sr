@@ -34,6 +34,8 @@ def load_train_config(raw_cfg: DictConfig | Mapping[str, Any]) -> TrainAppConfig
     cfg = TrainAppConfig(
         seed=int(cfg_dict.get("seed", 0)),
         models=_parse_models_config(cfg_dict),
+        data_norm=_parse_data_norm_config(cfg_dict),
+        upscale=int(cfg_dict["upscale"]),
         dataset=_parse_train_dataset_config(cfg_dict),
         train=TrainConfig(
             epochs=int(cfg_dict["train"]["epochs"]),
@@ -64,6 +66,7 @@ def load_train_config(raw_cfg: DictConfig | Mapping[str, Any]) -> TrainAppConfig
             checkpoint=normalize_optional_string(cfg_dict.get("resume", {}).get("checkpoint")),
             load_optimizer=bool(cfg_dict.get("resume", {}).get("load_optimizer", True)),
             load_scheduler=bool(cfg_dict.get("resume", {}).get("load_scheduler", True)),
+            load_callbacks=bool(cfg_dict.get("resume", {}).get("load_callbacks", True)),
             load_rng_state=bool(cfg_dict.get("resume", {}).get("load_rng_state", True)),
         ),
         paths=TrainPathsConfig(
@@ -83,6 +86,8 @@ def load_evaluate_config(raw_cfg: DictConfig | Mapping[str, Any]) -> EvaluateApp
     cfg_dict = _to_dict(raw_cfg)
     cfg = EvaluateAppConfig(
         models=_parse_models_config(cfg_dict),
+        data_norm=_parse_data_norm_config(cfg_dict),
+        upscale=int(cfg_dict["upscale"]),
         dataset=_parse_evaluate_dataset_config(cfg_dict),
         evaluate=EvaluateConfig(
             checkpoint=normalize_optional_string(cfg_dict["evaluate"].get("checkpoint")),
@@ -101,6 +106,8 @@ def load_infer_config(raw_cfg: DictConfig | Mapping[str, Any]) -> InferAppConfig
     cfg_dict = _to_dict(raw_cfg)
     cfg = InferAppConfig(
         models=_parse_models_config(cfg_dict),
+        data_norm=_parse_data_norm_config(cfg_dict),
+        upscale=int(cfg_dict["upscale"]),
         dataset=_parse_infer_dataset_config(cfg_dict),
         infer=InferConfig(
             checkpoint=normalize_optional_string(cfg_dict["infer"].get("checkpoint")),
@@ -146,19 +153,16 @@ def _parse_models_config(cfg_dict: Mapping[str, Any]) -> ModelConfig:
         raise KeyError("缺少 models 配置段")
     return ModelConfig(
         name=str(section["name"]),
+        in_dim=int(section["in_dim"]) if section.get("in_dim") is not None else None,
         params=dict(section.get("params", {})),
     )
 
 
 def _parse_train_dataset_config(cfg_dict: Mapping[str, Any]) -> TrainDatasetConfig:
     dataset = cfg_dict["dataset"]
-    normalize = _parse_normalize_config(dataset["normalize"])
     return TrainDatasetConfig(
         name=str(dataset["name"]),
-        upscale=int(dataset["upscale"]),
-        channels=int(dataset["channels"]),
         lr_patch_size=int(dataset["lr_patch_size"]),
-        normalize=normalize,
         train_lr_root=str(dataset["train_lr_root"]),
         train_hr_root=str(dataset["train_hr_root"]),
         val_lr_root=str(dataset["val_lr_root"]),
@@ -169,12 +173,8 @@ def _parse_train_dataset_config(cfg_dict: Mapping[str, Any]) -> TrainDatasetConf
 
 def _parse_evaluate_dataset_config(cfg_dict: Mapping[str, Any]) -> EvaluateDatasetConfig:
     dataset = cfg_dict["dataset"]
-    normalize = _parse_normalize_config(dataset["normalize"])
     return EvaluateDatasetConfig(
         name=str(dataset["name"]),
-        upscale=int(dataset["upscale"]),
-        channels=int(dataset["channels"]),
-        normalize=normalize,
         eval_lr_root=str(dataset["eval_lr_root"]),
         eval_hr_root=str(dataset["eval_hr_root"]),
         max_sample=parse_max_sample(dataset.get("max_sample", False)),
@@ -183,17 +183,14 @@ def _parse_evaluate_dataset_config(cfg_dict: Mapping[str, Any]) -> EvaluateDatas
 
 def _parse_infer_dataset_config(cfg_dict: Mapping[str, Any]) -> InferDatasetConfig:
     dataset = cfg_dict["dataset"]
-    normalize = _parse_normalize_config(dataset["normalize"])
     return InferDatasetConfig(
         name=str(dataset["name"]),
-        upscale=int(dataset["upscale"]),
-        channels=int(dataset["channels"]),
-        normalize=normalize,
         infer_lr_root=str(dataset["infer_lr_root"]),
     )
 
 
-def _parse_normalize_config(section: Mapping[str, Any]) -> NormalizeConfig:
+def _parse_data_norm_config(cfg_dict: Mapping[str, Any]) -> NormalizeConfig:
+    section = cfg_dict["data_norm"]
     return NormalizeConfig(
         mean=[float(x) for x in section["mean"]],
         std=[float(x) for x in section["std"]],

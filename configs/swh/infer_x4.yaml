@@ -1,0 +1,29 @@
+# @package _global_
+
+defaults:
+  - /models: edsr
+  - _self_
+
+upscale: 4
+
+data_norm:
+  mean: [0.7569751076884808]
+  std: [0.884616448662017]
+
+dataset:
+  name: swh
+  infer_lr_root: /workspace/dataset/test/swh/x4/lr
+
+infer:
+  checkpoint: null
+  save_results: true
+  save_dir: ./results
+  mask: /workspace/dataset/test/swh/x4/mask.npy
+  batch_size: 1
+  num_workers: 4
+
+hydra:
+  run:
+    dir: ./experiments/${now:%Y%m%d_%H%M%S}_infer_${models.name}_${dataset.name}_x${upscale}
+  job:
+    chdir: false

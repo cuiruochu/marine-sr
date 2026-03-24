@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - /models: edsr
+  - _self_
+
+upscale: 4
+
+data_norm:
+  mean: [4.4473377934895]
+  std: [3.0444616107152527]
+
+dataset:
+  name: wind
+  eval_lr_root: /workspace/dataset/test/wind/x4/lr
+  eval_hr_root: /workspace/dataset/test/wind/x4/hr
+  max_sample: false
+
+evaluate:
+  checkpoint: null
+  save_results: false
+  save_dir: ./results
+  mask: null
+  batch_size: 1
+  num_workers: 4
+
+hydra:
+  run:
+    dir: ./experiments/${now:%Y%m%d_%H%M%S}_evaluate_${models.name}_${dataset.name}_x${upscale}
+  job:
+    chdir: false

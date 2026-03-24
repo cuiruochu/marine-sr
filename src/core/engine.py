@@ -39,8 +39,6 @@ class Engine:
 
         self.current_epoch = 0
         self.global_step = 0
-        self.best_metric = float("inf")
-        self.best_epoch = 0
 
         self._train_loader = None
         self._val_loader = None
@@ -163,8 +161,6 @@ class Engine:
         state = {
             "epoch": epoch,
             "global_step": self.global_step,
-            "best_metric": self.best_metric,
-            "best_epoch": self.best_epoch,
             "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "callbacks": self.callbacks.state_dict(),
@@ -183,6 +179,7 @@ class Engine:
         path: str,
         load_optimizer: bool = True,
         load_scheduler: bool = True,
+        load_callbacks: bool = True,
         load_rng_state: bool = True,
     ) -> int:
         ckpt = torch.load(path, map_location=self.device, weights_only=False)
@@ -197,9 +194,8 @@ class Engine:
 
         self.current_epoch = ckpt.get("epoch", 0)
         self.global_step = ckpt.get("global_step", 0)
-        self.best_metric = ckpt.get("best_metric", float("inf"))
-        self.best_epoch = ckpt.get("best_epoch", 0)
-        self.callbacks.load_state_dict(ckpt.get("callbacks"))
+        if load_callbacks:
+            self.callbacks.load_state_dict(ckpt.get("callbacks"))
         if load_rng_state:
             restore_rng_state(ckpt.get("rng_state"))
 

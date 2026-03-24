@@ -67,8 +67,12 @@ class Evaluator:
         self.callbacks.on_eval_begin(self)
         logger.info(f"{stage_name} started: batches={self.total_batches}")
 
-        total_psnr, total_ssim, total_mae, total_max_mae = 0.0, 0.0, 0.0, 0.0
-        metric_samples = 0
+        metric_values: dict[str, list[torch.Tensor]] = {
+            "psnr": [],
+            "ssim": [],
+            "mae": [],
+            "max_mae": [],
+        }
 
         for batch in test_loader:
             self.current_batch += 1
@@ -99,24 +103,16 @@ class Evaluator:
             self._validate_mask_shape(mask_t, hr)
             hr_norm, sr_norm = normalize_to_01(hr, sr)
 
-            batch_psnr = calculate_psnr(hr_norm, sr_norm, mask=mask_t)
-            batch_ssim = calculate_ssim(hr_norm, sr_norm, mask=mask_t)
-            batch_mae = calculate_mae(sr, hr, mask=mask_t)
-            batch_max_mae = calculate_max_mae(sr, hr, mask=mask_t)
-            batch_size = hr.shape[0]
-
-            total_psnr += batch_psnr * batch_size
-            total_ssim += batch_ssim * batch_size
-            total_mae += batch_mae * batch_size
-            total_max_mae = max(total_max_mae, batch_max_mae)
-            metric_samples += batch_size
-
-            metrics = {
-                "psnr": batch_psnr,
-                "ssim": batch_ssim,
-                "mae": batch_mae,
-                "max_mae": batch_max_mae,
+            batch_metrics = {
+                "psnr": calculate_psnr(hr_norm, sr_norm, mask=mask_t),
+                "ssim": calculate_ssim(hr_norm, sr_norm, mask=mask_t),
+                "mae": calculate_mae(sr, hr, mask=mask_t),
+                "max_mae": calculate_max_mae(sr, hr, mask=mask_t),
             }
+            callback_metrics = {name: values.detach().cpu() for name, values in batch_metrics.items()}
+            for name, values in callback_metrics.items():
+                metric_values[name].append(values)
+
             sr_for_save = apply_output_mask(sr, mask_t) if mask_t is not None else sr
             self.callbacks.on_batch_end(
                 self,
@@ -124,7 +120,7 @@ class Evaluator:
                 sr=sr_for_save,
                 hr=hr,
                 filename=filename,
-                metrics=metrics,
+                metrics=callback_metrics,
                 mask=mask,
             )
             if self.current_batch in progress_points:
@@ -134,12 +130,16 @@ class Evaluator:
                 )
 
         metrics = {}
-        if metric_samples > 0:
+        if metric_values["psnr"]:
+            psnr = torch.cat(metric_values["psnr"])
+            ssim = torch.cat(metric_values["ssim"])
+            mae = torch.cat(metric_values["mae"])
+            max_mae = torch.cat(metric_values["max_mae"])
             metrics = {
-                "psnr": total_psnr / metric_samples,
-                "ssim": total_ssim / metric_samples,
-                "mae": total_mae / metric_samples,
-                "max_mae": total_max_mae,
+                "psnr": psnr.mean().item(),
+                "ssim": ssim.mean().item(),
+                "mae": mae.mean().item(),
+                "max_mae": max_mae.max().item(),
             }
 
         self.callbacks.on_eval_end(self, metrics)

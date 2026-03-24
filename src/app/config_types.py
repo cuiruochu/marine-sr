@@ -26,16 +26,14 @@ class DatasetPairConfig:
 @dataclass(frozen=True)
 class ModelConfig:
     name: str
+    in_dim: int | None
     params: dict[str, Any]
 
 
 @dataclass(frozen=True)
 class TrainDatasetConfig:
     name: str
-    upscale: int
-    channels: int
     lr_patch_size: int
-    normalize: NormalizeConfig
     train_lr_root: str
     train_hr_root: str
     val_lr_root: str
@@ -46,9 +44,6 @@ class TrainDatasetConfig:
 @dataclass(frozen=True)
 class EvaluateDatasetConfig:
     name: str
-    upscale: int
-    channels: int
-    normalize: NormalizeConfig
     eval_lr_root: str
     eval_hr_root: str
     max_sample: int | bool = False
@@ -57,9 +52,6 @@ class EvaluateDatasetConfig:
 @dataclass(frozen=True)
 class InferDatasetConfig:
     name: str
-    upscale: int
-    channels: int
-    normalize: NormalizeConfig
     infer_lr_root: str
 
 
@@ -94,6 +86,7 @@ class ResumeConfig:
     checkpoint: str | None
     load_optimizer: bool
     load_scheduler: bool
+    load_callbacks: bool
     load_rng_state: bool
 
 
@@ -178,14 +171,16 @@ TestLoaderSpec = EvaluationLoaderSpec | InferenceLoaderSpec
 class _ModelBuildMixin:
     models: ModelConfig
     dataset: Any
+    data_norm: NormalizeConfig
+    upscale: int
 
     @property
     def models_build_spec(self) -> ModelBuildSpec:
         return ModelBuildSpec(
             model_name=self.models.name,
             model_params=self.models.params,
-            in_dim=self.dataset.channels,
-            upscale=self.dataset.upscale,
+            in_dim=self.models.in_dim if self.models.in_dim is not None else len(self.data_norm.mean),
+            upscale=self.upscale,
         )
 
 
@@ -193,6 +188,8 @@ class _ModelBuildMixin:
 class TrainAppConfig(_ModelBuildMixin):
     seed: int
     models: ModelConfig
+    data_norm: NormalizeConfig
+    upscale: int
     dataset: TrainDatasetConfig
     train: TrainConfig
     resume: ResumeConfig
@@ -204,16 +201,16 @@ class TrainAppConfig(_ModelBuildMixin):
         train_pair = DatasetPairConfig(
             lr_root=str(resolve_project_path(self.dataset.train_lr_root)),
             hr_root=str(resolve_project_path(self.dataset.train_hr_root)),
-            normalize=self.dataset.normalize,
+            normalize=self.data_norm,
         )
         val_pair = DatasetPairConfig(
             lr_root=str(resolve_project_path(self.dataset.val_lr_root)),
             hr_root=str(resolve_project_path(self.dataset.val_hr_root)),
-            normalize=self.dataset.normalize,
+            normalize=self.data_norm,
             max_sample=self.dataset.max_sample,
         )
         return TrainLoaderSpec(
-            upscale=self.dataset.upscale,
+            upscale=self.upscale,
             lr_patch_size=self.dataset.lr_patch_size,
             train_pair=train_pair,
             val_pair=val_pair,
@@ -221,18 +218,20 @@ class TrainAppConfig(_ModelBuildMixin):
 
     @property
     def checkpoint_root(self) -> Path:
-        return PROJECT_ROOT / self.paths.checkpoint_dir / self.models.name / self.dataset.name / f"x{self.dataset.upscale}"
+        return PROJECT_ROOT / self.paths.checkpoint_dir / self.models.name / self.dataset.name / f"x{self.upscale}"
 
 
 class _EvalTaskMixin(_ModelBuildMixin):
     @property
     def results_root(self) -> Path:
-        return Path(self.save_dir) / self.models.name / self.dataset.name / f"x{self.dataset.upscale}"
+        return Path(self.save_dir) / self.models.name / self.dataset.name / f"x{self.upscale}"
 
 
 @dataclass(frozen=True)
 class EvaluateAppConfig(_EvalTaskMixin):
     models: ModelConfig
+    data_norm: NormalizeConfig
+    upscale: int
     dataset: EvaluateDatasetConfig
     evaluate: EvaluateConfig
 
@@ -269,12 +268,12 @@ class EvaluateAppConfig(_EvalTaskMixin):
         pair = DatasetPairConfig(
             lr_root=str(resolve_project_path(self.dataset.eval_lr_root)),
             hr_root=str(resolve_project_path(self.dataset.eval_hr_root)),
-            normalize=self.dataset.normalize,
+            normalize=self.data_norm,
             max_sample=self.dataset.max_sample,
         )
         return EvaluationLoaderSpec(
-            upscale=self.dataset.upscale,
-            normalize=self.dataset.normalize,
+            upscale=self.upscale,
+            normalize=self.data_norm,
             eval_pair=pair,
         )
 
@@ -282,6 +281,8 @@ class EvaluateAppConfig(_EvalTaskMixin):
 @dataclass(frozen=True)
 class InferAppConfig(_EvalTaskMixin):
     models: ModelConfig
+    data_norm: NormalizeConfig
+    upscale: int
     dataset: InferDatasetConfig
     infer: InferConfig
 
@@ -316,8 +317,8 @@ class InferAppConfig(_EvalTaskMixin):
     @property
     def test_loader_spec(self) -> InferenceLoaderSpec:
         return InferenceLoaderSpec(
-            upscale=self.dataset.upscale,
-            normalize=self.dataset.normalize,
+            upscale=self.upscale,
+            normalize=self.data_norm,
             infer_lr_root=str(resolve_project_path(self.dataset.infer_lr_root)),
         )
 

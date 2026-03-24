@@ -1,0 +1,9 @@
+# RDN 训练队列
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=rdn"]

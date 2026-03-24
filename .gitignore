@@ -21,6 +21,8 @@ checkpoints/
 experiments/
 queue_runs/
 .test-artifacts/
+.test-artifacts/queue_demo/
+.test-artifacts/queue_demo_data/
 
 # Logs
 *.log

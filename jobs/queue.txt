@@ -1,132 +1,126 @@
 # 训练实验队列模板
+# 单模型拆分文件见: jobs/queue_*.txt
 # 规则：
 # 1. 每行一条完整命令
 # 2. 以 # 开头的行为注释
-# 3. 运行前请先替换每个数据集对应的均值、标准差和路径占位符
-# 4. 除了模型、数据集名、通道数、mean/std、Train/Val 路径外，其余参数全部走 configs/train.yaml 默认值
+# 3. 优先使用 configs/<dataset>/train_x{scale}.yaml 提供数据集、upscale、data_norm、路径与默认训练参数
+# 4. 命令行只覆盖少量实验变量，例如 models、resume.checkpoint，必要时也可以临时覆盖 models.in_dim 或 train.lr
 #
-# 数据集占位符约定：
-# - wind / mwp / swh: 单通道，mean/std 各 1 个值
-# - mwd: 双通道，mean/std 各 2 个值
+# 目录约定：
+# - wind: configs/wind/train_x2.yaml, configs/wind/train_x4.yaml
+# - mwp:  configs/mwp/train_x2.yaml,  configs/mwp/train_x4.yaml
+# - swh:  configs/swh/train_x2.yaml,  configs/swh/train_x4.yaml
+# - mwd:  configs/mwd/train_x2.yaml,  configs/mwd/train_x4.yaml
 #
-# wind:
-#   <WIND_MEAN> <WIND_STD>
-#   <WIND_TRAIN_LR_ROOT> <WIND_TRAIN_HR_ROOT> <WIND_VAL_LR_ROOT> <WIND_VAL_HR_ROOT>
-# mwp:
-#   <MWP_MEAN> <MWP_STD>
-#   <MWP_TRAIN_LR_ROOT> <MWP_TRAIN_HR_ROOT> <MWP_VAL_LR_ROOT> <MWP_VAL_HR_ROOT>
-# swh:
-#   <SWH_MEAN> <SWH_STD>
-#   <SWH_TRAIN_LR_ROOT> <SWH_TRAIN_HR_ROOT> <SWH_VAL_LR_ROOT> <SWH_VAL_HR_ROOT>
-# mwd:
-#   <MWD_MEAN_0> <MWD_MEAN_1> <MWD_STD_0> <MWD_STD_1>
-#   <MWD_TRAIN_LR_ROOT> <MWD_TRAIN_HR_ROOT> <MWD_VAL_LR_ROOT> <MWD_VAL_HR_ROOT>
+# 示例：
+# ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rcan"]
+# ["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=swinir", "resume.checkpoint='checkpoints/SwinIR/mwd/x4/best.pth'"]
+# ["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=edsr", "train.lr=1e-4"]
 
 # ====================
 # EDSR
 # ====================
-# ["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=edsr", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=edsr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=edsr"]
 
 # ====================
 # RCAN
 # ====================
-# ["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=rcan", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=rcan"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=rcan"]
 
 # ====================
 # RDN
 # ====================
-# ["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-# ["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=rdn", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=rdn"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=rdn"]
 
 # ====================
 # SwinIR
 # ====================
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'", "resume.checkpoint='checkpoints/SwinIR/wind/x2/best.pth'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=swinir", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=swinir", "resume.checkpoint='checkpoints/SwinIR/wind/x2/best.pth'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=swinir"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=swinir"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=swinir"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=swinir"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=swinir"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=swinir"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=swinir"]
 
 # ====================
 # MySR
 # ====================
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysr", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=mysr"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=mysr"]
 
 # ====================
 # MySRAb1
 # ====================
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab1", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=mysrab1"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=mysrab1"]
 
 # ====================
 # MySRAb2
 # ====================
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=mysrab2", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=mysrab2"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=mysrab2"]
 
 # ====================
 # ATD
 # ====================
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=atd", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=atd"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=atd"]
 
 # ====================
 # CAMixer
 # ====================
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=wind", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=wind", "dataset.upscale=4", "dataset.channels=1", "dataset.normalize.mean=[4.4473377934895]", "dataset.normalize.std=[3.0444616107152527]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/wind/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/wind/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/wind/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/wind/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=mwp", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=mwp", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[3.6305425162042853]", "dataset.normalize.std=[3.213140657617123]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwp/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwp/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwp/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwp/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=swh", "dataset.upscale=2", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=swh", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=1", "dataset.normalize.mean=[0.7569751076884808]", "dataset.normalize.std=[0.884616448662017]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/swh/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/swh/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/swh/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/swh/x4/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=mwd", "dataset.upscale=2", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x2/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x2/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x2/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x2/hr'"]
-["uv", "run", "python", "scripts/train.py", "models=camixer", "dataset.name=mwd", "dataset.upscale=4", "dataset.lr_patch_size=15", "dataset.channels=2", "dataset.normalize.mean=[0.4989248121185863,0.24549368276091751]", "dataset.normalize.std=[0.6533769533620326,0.5137172765330106]", "dataset.train_lr_root='E:/毕业论文代码/dataset/train/mwd/x4/lr'", "dataset.train_hr_root='E:/毕业论文代码/dataset/train/mwd/x4/hr'", "dataset.val_lr_root='E:/毕业论文代码/dataset/test/mwd/x4/lr'", "dataset.val_hr_root='E:/毕业论文代码/dataset/test/mwd/x4/hr'"]
-
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x2", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "wind/train_x4", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x2", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwp/train_x4", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x2", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "swh/train_x4", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x2", "models=camixer"]
+["uv", "run", "python", "scripts/train.py", "--config-name", "mwd/train_x4", "models=camixer"]

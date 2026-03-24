@@ -22,8 +22,9 @@ def test_calculate_psnr():
 
     psnr = calculate_psnr(img1, img2)
 
-    assert isinstance(psnr, float)
-    assert psnr > 0
+    assert isinstance(psnr, torch.Tensor)
+    assert psnr.shape == (1,)
+    assert psnr[0].item() > 0
 
 
 def test_calculate_psnr_identical():
@@ -31,7 +32,8 @@ def test_calculate_psnr_identical():
 
     psnr = calculate_psnr(img, img)
 
-    assert psnr == float("inf")
+    assert psnr.shape == (1,)
+    assert psnr[0].item() == float("inf")
 
 
 def test_calculate_ssim():
@@ -40,8 +42,9 @@ def test_calculate_ssim():
 
     ssim = calculate_ssim(img1, img2)
 
-    assert isinstance(ssim, float)
-    assert -1 <= ssim <= 1
+    assert isinstance(ssim, torch.Tensor)
+    assert ssim.shape == (1,)
+    assert -1 <= ssim[0].item() <= 1
 
 
 def test_ssim_without_mask_uses_same_weighted_normalization_idea():
@@ -50,7 +53,7 @@ def test_ssim_without_mask_uses_same_weighted_normalization_idea():
 
     ssim = calculate_ssim(img1, img2, kernel_size=3, sigma=1.0)
 
-    assert pytest.approx(ssim, rel=1e-6, abs=1e-6) == 1.0
+    assert pytest.approx(ssim[0].item(), rel=1e-6, abs=1e-6) == 1.0
 
 
 def test_calculate_mae():
@@ -59,8 +62,9 @@ def test_calculate_mae():
 
     mae = calculate_mae(img1, img2)
 
-    assert isinstance(mae, float)
-    assert mae >= 0
+    assert isinstance(mae, torch.Tensor)
+    assert mae.shape == (1,)
+    assert mae[0].item() >= 0
 
 
 def test_calculate_max_mae():
@@ -69,8 +73,9 @@ def test_calculate_max_mae():
 
     max_mae = calculate_max_mae(img1, img2)
 
-    assert isinstance(max_mae, float)
-    assert max_mae >= 0
+    assert isinstance(max_mae, torch.Tensor)
+    assert max_mae.shape == (1,)
+    assert max_mae[0].item() >= 0
 
 
 def test_reverse_norm():
@@ -103,7 +108,7 @@ def test_normalize_to_01_maps_identical_constant_inputs_into_unit_interval():
 
     assert torch.all(norm1 == 0)
     assert torch.all(norm2 == 0)
-    assert pytest.approx(calculate_ssim(norm1, norm2), rel=1e-6, abs=1e-6) == 1.0
+    assert pytest.approx(calculate_ssim(norm1, norm2)[0].item(), rel=1e-6, abs=1e-6) == 1.0
 
 
 def test_metrics_support_multi_channel_inputs_without_special_cases():
@@ -114,10 +119,14 @@ def test_metrics_support_multi_channel_inputs_without_special_cases():
     mae = calculate_mae(img, img)
     max_mae = calculate_max_mae(img, img)
 
-    assert psnr == float("inf")
-    assert pytest.approx(ssim, rel=1e-6, abs=1e-6) == 1.0
-    assert mae == 0.0
-    assert max_mae == 0.0
+    assert psnr.shape == (2,)
+    assert ssim.shape == (2,)
+    assert mae.shape == (2,)
+    assert max_mae.shape == (2,)
+    assert torch.isinf(psnr).all()
+    assert torch.allclose(ssim, torch.ones(2), atol=1e-6)
+    assert torch.allclose(mae, torch.zeros(2), atol=1e-6)
+    assert torch.allclose(max_mae, torch.zeros(2), atol=1e-6)
 
 
 def test_normalize_to_01_supports_multi_channel_inputs():
@@ -134,10 +143,10 @@ def test_metrics_support_mask_without_channel_specific_logic():
     img = torch.randn(1, 2, 10, 10)
     mask = torch.randint(0, 2, (10, 10), dtype=torch.bool)
 
-    assert calculate_psnr(img, img, mask=mask) == float("inf")
-    assert pytest.approx(calculate_ssim(img, img, mask=mask), rel=1e-6, abs=1e-6) == 1.0
-    assert calculate_mae(img, img, mask=mask) == 0.0
-    assert calculate_max_mae(img, img, mask=mask) == 0.0
+    assert calculate_psnr(img, img, mask=mask)[0].item() == float("inf")
+    assert pytest.approx(calculate_ssim(img, img, mask=mask)[0].item(), rel=1e-6, abs=1e-6) == 1.0
+    assert calculate_mae(img, img, mask=mask)[0].item() == 0.0
+    assert calculate_max_mae(img, img, mask=mask)[0].item() == 0.0
 
 
 def test_masked_ssim_ignores_masked_out_region_in_statistics():
@@ -151,7 +160,29 @@ def test_masked_ssim_ignores_masked_out_region_in_statistics():
 
     ssim = calculate_ssim(img1, img2, mask=mask, kernel_size=3, sigma=1.0)
 
-    assert pytest.approx(ssim, rel=1e-6, abs=1e-6) == 1.0
+    assert pytest.approx(ssim[0].item(), rel=1e-6, abs=1e-6) == 1.0
+
+
+def test_metrics_return_one_value_per_sample():
+    img1 = torch.zeros(2, 1, 4, 4)
+    img2 = img1.clone()
+    img2[1] = 1.0
+
+    psnr = calculate_psnr(img1, img2)
+    ssim = calculate_ssim(img1, img2, kernel_size=3, sigma=1.0)
+    mae = calculate_mae(img1, img2)
+    max_mae = calculate_max_mae(img1, img2)
+
+    assert psnr.shape == (2,)
+    assert ssim.shape == (2,)
+    assert mae.shape == (2,)
+    assert max_mae.shape == (2,)
+    assert psnr[0].item() == float("inf")
+    assert mae[0].item() == 0.0
+    assert max_mae[0].item() == 0.0
+    assert torch.isfinite(psnr[1])
+    assert mae[1].item() == 1.0
+    assert max_mae[1].item() == 1.0
 
 
 def test_apply_output_mask_broadcasts_over_channels():

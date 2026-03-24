@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - /models: edsr
+  - _self_
+
+upscale: 4
+
+data_norm:
+  mean: [3.6305425162042853]
+  std: [3.213140657617123]
+
+dataset:
+  name: mwp
+  eval_lr_root: /workspace/dataset/test/mwp/x4/lr
+  eval_hr_root: /workspace/dataset/test/mwp/x4/hr
+  max_sample: false
+
+evaluate:
+  checkpoint: null
+  save_results: false
+  save_dir: ./results
+  mask: /workspace/dataset/test/mwp/x4/mask.npy
+  batch_size: 1
+  num_workers: 4
+
+hydra:
+  run:
+    dir: ./experiments/${now:%Y%m%d_%H%M%S}_evaluate_${models.name}_${dataset.name}_x${upscale}
+  job:
+    chdir: false

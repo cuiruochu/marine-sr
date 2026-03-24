@@ -1,0 +1,31 @@
+# @package _global_
+
+defaults:
+  - /models: edsr
+  - _self_
+
+upscale: 4
+
+data_norm:
+  mean: [0.4989248121185863, 0.24549368276091751]
+  std: [0.6533769533620326, 0.5137172765330106]
+
+dataset:
+  name: mwd
+  eval_lr_root: /workspace/dataset/test/mwd/x4/lr
+  eval_hr_root: /workspace/dataset/test/mwd/x4/hr
+  max_sample: false
+
+evaluate:
+  checkpoint: null
+  save_results: false
+  save_dir: ./results
+  mask: /workspace/dataset/test/mwd/x4/mask.npy
+  batch_size: 1
+  num_workers: 4
+
+hydra:
+  run:
+    dir: ./experiments/${now:%Y%m%d_%H%M%S}_evaluate_${models.name}_${dataset.name}_x${upscale}
+  job:
+    chdir: false

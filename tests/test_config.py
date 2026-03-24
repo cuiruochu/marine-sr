@@ -20,14 +20,17 @@ def test_load_train_config():
     cfg = load_train_config(_compose("train"))
 
     assert cfg.models.name == "EDSR"
-    assert cfg.dataset.upscale == 2
-    assert cfg.dataset.channels == 1
+    assert cfg.models.in_dim == 1
+    assert cfg.upscale == 2
+    assert cfg.data_norm.mean == [4.565732]
+    assert cfg.data_norm.std == [3.1361]
     assert cfg.dataset.lr_patch_size == 30
     assert cfg.dataset.train_lr_root
     assert cfg.dataset.val_lr_root
     assert cfg.train.epochs == 200
     assert cfg.train.batch_size == 16
     assert cfg.train.lr == 2e-4
+    assert cfg.resume.load_callbacks is True
 
 
 def test_train_models_build_spec():
@@ -61,6 +64,9 @@ def test_load_evaluate_config():
     cfg = load_evaluate_config(_compose("evaluate"))
 
     assert cfg.models.name == "EDSR"
+    assert cfg.models.in_dim is None
+    assert cfg.upscale == 2
+    assert cfg.data_norm.mean == [4.565732]
     assert cfg.dataset.eval_lr_root
     assert cfg.dataset.max_sample is False
     assert cfg.evaluate.batch_size == 1
@@ -73,11 +79,46 @@ def test_load_infer_config():
     cfg = load_infer_config(_compose("infer"))
 
     assert cfg.models.name == "EDSR"
+    assert cfg.models.in_dim is None
+    assert cfg.upscale == 2
+    assert cfg.data_norm.mean == [4.565732]
     assert cfg.dataset.infer_lr_root
     assert cfg.infer.batch_size == 1
     assert cfg.mode == "inference"
     assert isinstance(cfg.test_loader_spec, InferenceLoaderSpec)
     assert cfg.test_loader_spec.infer_lr_root
+
+
+def test_load_dataset_specific_train_config():
+    cfg = load_train_config(_compose("mwd/train_x4"))
+
+    assert cfg.models.name == "EDSR"
+    assert cfg.models.in_dim == 2
+    assert cfg.upscale == 4
+    assert cfg.data_norm.mean == [0.4989248121185863, 0.24549368276091751]
+    assert cfg.dataset.lr_patch_size == 15
+    assert cfg.dataset.train_lr_root.endswith("data/mwd/train/x4/lr")
+    assert cfg.resume.load_callbacks is True
+
+
+def test_load_dataset_specific_evaluate_config():
+    cfg = load_evaluate_config(_compose("wind/evaluate_x2"))
+
+    assert cfg.models.name == "EDSR"
+    assert cfg.models.in_dim is None
+    assert cfg.upscale == 2
+    assert cfg.data_norm.std == [3.0444616107152527]
+    assert cfg.dataset.eval_lr_root.endswith("data/wind/test/x2/lr")
+
+
+def test_load_dataset_specific_infer_config():
+    cfg = load_infer_config(_compose("swh/infer_x4"))
+
+    assert cfg.models.name == "EDSR"
+    assert cfg.models.in_dim is None
+    assert cfg.upscale == 4
+    assert cfg.data_norm.mean == [0.7569751076884808]
+    assert cfg.dataset.infer_lr_root.endswith("data/swh/infer/x4/lr")
 
 
 def test_load_evaluate_config_accepts_batch_size_gt_one():

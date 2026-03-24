@@ -44,25 +44,17 @@ def _extract_checkpoint_signature(config: Any) -> dict[str, Any] | None:
 
     signature = {
         "models.name": model_section.get("name"),
+        "models.in_dim": model_section.get("in_dim"),
         "models.params": dict(model_section.get("params", {})),
-        "dataset.name": dataset_section.get("name"),
-        "dataset.upscale": dataset_section.get("upscale"),
-        "dataset.channels": dataset_section.get("channels"),
+        "upscale": config.get("upscale", dataset_section.get("upscale")),
     }
-    train_section = config.get("train")
-    if isinstance(train_section, Mapping) and "epochs" in train_section:
-        signature["train.epochs"] = train_section.get("epochs")
     return signature
 
 
 def _build_current_signature(cfg: TrainAppConfig | EvalTaskConfig) -> dict[str, Any]:
-    signature = {
+    return {
         "models.name": cfg.models.name,
+        "models.in_dim": cfg.models.in_dim,
         "models.params": dict(cfg.models.params),
-        "dataset.name": cfg.dataset.name,
-        "dataset.upscale": cfg.dataset.upscale,
-        "dataset.channels": cfg.dataset.channels,
+        "upscale": cfg.upscale,
     }
-    if isinstance(cfg, TrainAppConfig):
-        signature["train.epochs"] = cfg.train.epochs
-    return signature

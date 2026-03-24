@@ -14,6 +14,12 @@ def _reduction_dims(img: torch.Tensor) -> tuple[int, ...]:
     return tuple(range(1, img.ndim))
 
 
+def _flatten_per_sample(values: torch.Tensor) -> torch.Tensor:
+    if values.ndim < 1:
+        raise ValueError(f"指标输入至少需要 batch 维，当前 shape={tuple(values.shape)}")
+    return values.reshape(values.shape[0], -1)
+
+
 def _build_gaussian_window(
     kernel_size: int,
     sigma: float,
@@ -37,7 +43,7 @@ def _broadcast_mask(mask: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return torch.broadcast_to(mask.to(device=target.device), target.shape).to(dtype=target.dtype)
 
 
-def calculate_psnr(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> float:
+def calculate_psnr(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
     """计算 PSNR，假设输入已经在 [0, 1] 范围内。"""
     dims = _reduction_dims(img1)
     squared_error = (img1 - img2) ** 2
@@ -49,7 +55,7 @@ def calculate_psnr(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.
         mse = squared_error.mean(dim=dims)
 
     psnr = torch.where(mse <= EPS, torch.full_like(mse, float("inf")), 10.0 * torch.log10(1.0 / mse.clamp_min(EPS)))
-    return psnr.mean().item()
+    return psnr
 
 
 def calculate_ssim(
@@ -59,7 +65,7 @@ def calculate_ssim(
     *,
     kernel_size: int = 11,
     sigma: float = 1.5,
-) -> float:
+) -> torch.Tensor:
     """计算窗口化 SSIM，假设输入已经在 [0, 1] 范围内。"""
     if img1.ndim != 4 or img2.ndim != 4:
         raise ValueError(f"SSIM 仅支持 NCHW 四维输入，当前 img1={tuple(img1.shape)}, img2={tuple(img2.shape)}")
@@ -101,12 +107,14 @@ def calculate_ssim(
     denominator = (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
     ssim = numerator / denominator.clamp_min(EPS)
     valid = mask_map > 0
-    if valid.any():
-        return ssim.masked_select(valid).mean().item()
-    return 0.0
+    ssim_flat = _flatten_per_sample(ssim)
+    valid_flat = _flatten_per_sample(valid.to(dtype=ssim.dtype))
+    valid_count = valid_flat.sum(dim=1)
+    mean_ssim = (ssim_flat * valid_flat).sum(dim=1) / valid_count.clamp_min(1.0)
+    return torch.where(valid_count > 0, mean_ssim, torch.zeros_like(mean_ssim))
 
 
-def calculate_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> float:
+def calculate_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
     """计算 MAE。"""
     dims = _reduction_dims(img1)
     diff = torch.abs(img1 - img2)
@@ -116,17 +124,17 @@ def calculate_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.T
         mae = (diff * mask).sum(dim=dims) / mask.sum(dim=dims).clamp_min(1.0)
     else:
         mae = diff.mean(dim=dims)
-    return mae.mean().item()
+    return mae
 
 
-def calculate_max_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> float:
+def calculate_max_mae(img1: torch.Tensor, img2: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
     """计算最大 MAE。"""
     dims = _reduction_dims(img1)
     diff = torch.abs(img1 - img2)
     if mask is not None:
         mask = _broadcast_mask(mask, img1)
         diff = diff * mask
-    return diff.amax(dim=dims).max().item()
+    return diff.amax(dim=dims)
 
 
 def reverse_norm(img: torch.Tensor, mean: torch.Tensor, std: torch.Tensor) -> torch.Tensor:

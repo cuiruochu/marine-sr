@@ -32,6 +32,7 @@ class CheckpointCallback(Callback):
             self.best_value = float("-inf")
             self.is_better = lambda current, best: current > best
 
+        self.best_epoch = 0
         self._saved_epochs: list = []
 
     def on_train_begin(self, engine) -> None:
@@ -56,8 +57,7 @@ class CheckpointCallback(Callback):
             current = logs[self.monitor]
             if self.is_better(current, self.best_value):
                 self.best_value = current
-                engine.best_metric = current
-                engine.best_epoch = epoch
+                self.best_epoch = epoch
 
                 path = self.save_dir / "best.pth"
                 engine.save_checkpoint(str(path), epoch)
@@ -69,11 +69,14 @@ class CheckpointCallback(Callback):
     def state_dict(self) -> dict:
         return {
             "best_value": self.best_value,
+            "best_epoch": self.best_epoch,
             "saved_epochs": list(self._saved_epochs),
         }
 
     def load_state_dict(self, state: dict) -> None:
         if "best_value" in state:
             self.best_value = state["best_value"]
+        if "best_epoch" in state:
+            self.best_epoch = state["best_epoch"]
         if "saved_epochs" in state:
             self._saved_epochs = list(state["saved_epochs"])

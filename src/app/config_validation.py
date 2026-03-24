@@ -13,7 +13,10 @@ from src.optim.scheduler import list_schedulers
 
 def validate_train_config(cfg: TrainAppConfig) -> None:
     _validate_model_name(cfg.models.name)
-    _validate_dataset_common("dataset", cfg.dataset.name, cfg.dataset.upscale, cfg.dataset.channels, cfg.dataset.normalize)
+    _validate_model_in_dim(cfg.models.in_dim)
+    _validate_data_norm("data_norm", cfg.data_norm)
+    _validate_dataset_common("dataset", cfg.dataset.name)
+    _validate_positive_int("upscale", cfg.upscale)
     _validate_positive_int("dataset.lr_patch_size", cfg.dataset.lr_patch_size)
     _validate_non_empty("dataset.train_lr_root", cfg.dataset.train_lr_root)
     _validate_non_empty("dataset.train_hr_root", cfg.dataset.train_hr_root)
@@ -49,7 +52,10 @@ def validate_train_config(cfg: TrainAppConfig) -> None:
 
 def validate_evaluate_config(cfg: EvaluateAppConfig) -> None:
     _validate_model_name(cfg.models.name)
-    _validate_dataset_common("dataset", cfg.dataset.name, cfg.dataset.upscale, cfg.dataset.channels, cfg.dataset.normalize)
+    _validate_model_in_dim(cfg.models.in_dim)
+    _validate_data_norm("data_norm", cfg.data_norm)
+    _validate_dataset_common("dataset", cfg.dataset.name)
+    _validate_positive_int("upscale", cfg.upscale)
     _validate_non_empty("dataset.eval_lr_root", cfg.dataset.eval_lr_root)
     _validate_non_empty("dataset.eval_hr_root", cfg.dataset.eval_hr_root)
     _validate_distinct_paths("dataset.eval_lr_root", cfg.dataset.eval_lr_root, "dataset.eval_hr_root", cfg.dataset.eval_hr_root)
@@ -67,7 +73,10 @@ def validate_evaluate_config(cfg: EvaluateAppConfig) -> None:
 
 def validate_infer_config(cfg: InferAppConfig) -> None:
     _validate_model_name(cfg.models.name)
-    _validate_dataset_common("dataset", cfg.dataset.name, cfg.dataset.upscale, cfg.dataset.channels, cfg.dataset.normalize)
+    _validate_model_in_dim(cfg.models.in_dim)
+    _validate_data_norm("data_norm", cfg.data_norm)
+    _validate_dataset_common("dataset", cfg.dataset.name)
+    _validate_positive_int("upscale", cfg.upscale)
     _validate_non_empty("dataset.infer_lr_root", cfg.dataset.infer_lr_root)
     _validate_positive_int("infer.batch_size", cfg.infer.batch_size)
     _validate_positive_int("infer.num_workers", cfg.infer.num_workers, allow_zero=True)
@@ -84,16 +93,23 @@ def _validate_model_name(name: str) -> None:
     _validate_choice("models.name", name, list_models())
 
 
-def _validate_dataset_common(field_prefix: str, name: str, upscale: int, channels: int, normalize) -> None:
+def _validate_model_in_dim(value: int | None) -> None:
+    if value is None:
+        return
+    _validate_positive_int("models.in_dim", value)
+
+
+def _validate_dataset_common(field_prefix: str, name: str) -> None:
     _validate_non_empty(f"{field_prefix}.name", name)
-    _validate_positive_int(f"{field_prefix}.upscale", upscale)
-    _validate_positive_int(f"{field_prefix}.channels", channels)
-    if len(normalize.mean) != channels:
-        raise ValueError(f"{field_prefix}.normalize.mean 长度必须等于 {field_prefix}.channels")
-    if len(normalize.std) != channels:
-        raise ValueError(f"{field_prefix}.normalize.std 长度必须等于 {field_prefix}.channels")
+
+
+def _validate_data_norm(field_prefix: str, normalize) -> None:
+    if len(normalize.mean) != len(normalize.std):
+        raise ValueError(f"{field_prefix}.mean 与 {field_prefix}.std 长度必须一致")
+    if len(normalize.mean) == 0:
+        raise ValueError(f"{field_prefix}.mean 不能为空")
     if any(value <= 0 for value in normalize.std):
-        raise ValueError(f"{field_prefix}.normalize.std 中的值必须大于 0")
+        raise ValueError(f"{field_prefix}.std 中的值必须大于 0")
 
 
 def _validate_choice(field_name: str, value: str, choices: list[str]) -> None:

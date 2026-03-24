@@ -78,7 +78,7 @@ def _log_evaluation_configuration(logger, cfg: EvaluateAppConfig | InferAppConfi
     logger.info("评估配置:")
     logger.info(f"  模型: {cfg.models.name}")
     logger.info(f"  数据集: {cfg.dataset.name}")
-    logger.info(f"  放大倍数: {cfg.dataset.upscale}")
+    logger.info(f"  放大倍数: {cfg.upscale}")
     logger.info(f"  模式: {cfg.mode}")
     logger.info(f"  检查点: {cfg.checkpoint}")
     logger.info(f"  Mask: {cfg.mask}" if cfg.mask else "  Mask: None")

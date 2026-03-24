@@ -85,6 +85,7 @@ def run_training(raw_cfg: DictConfig | TrainAppConfig):
             str(checkpoint_path),
             load_optimizer=cfg.resume.load_optimizer,
             load_scheduler=cfg.resume.load_scheduler,
+            load_callbacks=cfg.resume.load_callbacks,
             load_rng_state=cfg.resume.load_rng_state,
         )
         start_epoch = loaded_epoch + 1
@@ -113,7 +114,7 @@ def run_training(raw_cfg: DictConfig | TrainAppConfig):
 def _log_training_configuration(logger, cfg: TrainAppConfig):
     logger.info(f"  模型: {cfg.models.name}")
     logger.info(f"  数据集: {cfg.dataset.name}")
-    logger.info(f"  放大倍数: {cfg.dataset.upscale}")
+    logger.info(f"  放大倍数: {cfg.upscale}")
     logger.info(f"  训练轮数: {cfg.train.epochs}")
     logger.info(f"  批次大小: {cfg.train.batch_size}")
     logger.info(f"  学习率: {cfg.train.lr}")
