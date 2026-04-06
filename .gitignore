@@ -20,6 +20,7 @@ __pycache__/
 checkpoints/
 experiments/
 queue_runs/
+tmp/
 .test-artifacts/
 .test-artifacts/queue_demo/
 .test-artifacts/queue_demo_data/

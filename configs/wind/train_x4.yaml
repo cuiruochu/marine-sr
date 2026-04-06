@@ -17,17 +17,17 @@ data_norm:
 dataset:
   name: wind
   lr_patch_size: 15
-  train_lr_root: /workspace/dataset/train/wind/x4/lr
-  train_hr_root: /workspace/dataset/train/wind/x4/hr
-  val_lr_root: /workspace/dataset/test/wind/x4/lr
-  val_hr_root: /workspace/dataset/test/wind/x4/hr
+  train_lr_root: E:/毕业论文代码/dataset/train/wind/x4/lr
+  train_hr_root: E:/毕业论文代码/dataset/train/wind/x4/hr
+  val_lr_root: E:/毕业论文代码/dataset/test/wind/x4/lr
+  val_hr_root: E:/毕业论文代码/dataset/test/wind/x4/hr
   max_sample: 10
 
 train:
   epochs: 100
   batch_size: 16
-  num_workers: 8
-  val_num_workers: 4
+  num_workers: 4
+  val_num_workers: 1
   lr: 2e-4
   optimizer:
     name: adamw

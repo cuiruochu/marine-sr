@@ -1,0 +1,11 @@
+# ====================
+# bicubic
+# ====================
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "wind/evaluate_x2", "models=bicubic", "+models.in_dim=1", "dataset.eval_lr_root=../dataset/test/wind/x2/lr", "dataset.eval_hr_root=../dataset/test/wind/x2/hr", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "wind/evaluate_x4", "models=bicubic", "+models.in_dim=1", "dataset.eval_lr_root=../dataset/test/wind/x4/lr", "dataset.eval_hr_root=../dataset/test/wind/x4/hr", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "mwp/evaluate_x2", "models=bicubic", "+models.in_dim=1", "dataset.eval_lr_root=../dataset/test/mwp/x2/lr", "dataset.eval_hr_root=../dataset/test/mwp/x2/hr", "evaluate.mask=../dataset/test/mwp/x2/mask.npy", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "mwp/evaluate_x4", "models=bicubic", "+models.in_dim=1", "dataset.eval_lr_root=../dataset/test/mwp/x4/lr", "dataset.eval_hr_root=../dataset/test/mwp/x4/hr", "evaluate.mask=../dataset/test/mwp/x4/mask.npy", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "swh/evaluate_x2", "models=bicubic", "+models.in_dim=1", "dataset.eval_lr_root=../dataset/test/swh/x2/lr", "dataset.eval_hr_root=../dataset/test/swh/x2/hr", "evaluate.mask=../dataset/test/swh/x2/mask.npy", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "swh/evaluate_x4", "models=bicubic", "+models.in_dim=1", "dataset.eval_lr_root=../dataset/test/swh/x4/lr", "dataset.eval_hr_root=../dataset/test/swh/x4/hr", "evaluate.mask=../dataset/test/swh/x4/mask.npy", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "mwd/evaluate_x2", "models=bicubic", "+models.in_dim=2", "dataset.eval_lr_root=../dataset/test/mwd/x2/lr", "dataset.eval_hr_root=../dataset/test/mwd/x2/hr", "evaluate.mask=../dataset/test/mwd/x2/mask.npy", "evaluate.save_results=true"]
+["uv", "run", "python", "scripts/evaluate.py", "--config-name", "mwd/evaluate_x4", "models=bicubic", "+models.in_dim=2", "dataset.eval_lr_root=../dataset/test/mwd/x4/lr", "dataset.eval_hr_root=../dataset/test/mwd/x4/hr", "evaluate.mask=../dataset/test/mwd/x4/mask.npy", "evaluate.save_results=true"]
