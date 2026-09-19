@@ -78,7 +78,7 @@ scripts/
 ├── evaluate.py
 ├── infer.py
 ├── run_queue.py
-└── preprocess_dataset.py
+└── build_dataset.py
 ```
 
 ## 3. 配置设计
