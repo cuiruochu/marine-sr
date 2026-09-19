@@ -402,48 +402,46 @@ data/
 
 ### 数据预处理
 
-如果你手头只有原始 HR `.npy` 目录，可以先用预处理脚本统一生成训练用的 `HR/LR` 配对数据：
+使用 NetCDF 构建数据集时，可以通过统一流水线直接生成最终的 `HR/LR` 配对数据，不保存中间文件：
 
 ```bash
-uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/train/x2/hr --lr-output-dir ./data/wind/train/x2/lr --scale 2
+uv run python scripts/build_dataset.py --oper-nc ../dataset-2022/data_stream-oper_stepType-instant.nc --wave-nc ../dataset-2022/data_stream-wave_stepType-instant.nc --output-dir ../dataset-2022/test --scales 2 4
 ```
 
-对于 `mwd` 数据集，建议先进行 `cos/sin` 双通道编码，再做下采样预处理。原因是 `mwd` 表示角度，训练时若使用 `MSE` 一类逐点重建损失，直接回归角度值会把 `0°` 和 `360°` 误当成相距很远的数值。推荐流程是：
+`--scales` 支持传入一个或多个放大倍数，例如 `--scales 2`、`--scales 4` 或 `--scales 2 4`。传入多个尺度时，流水线会按最大尺度统一裁剪 HR 区域，再基于同一个 HR 生成所有尺度的 LR，保证不同倍率使用同一片空间范围。
 
-```bash
-uv run python scripts/encode_mwd_cos_sin.py --input-dir ./raw_mwd_hr --output-dir ./encoded_mwd_hr
-uv run python scripts/preprocess_dataset.py --hr-input-dir ./encoded_mwd_hr --hr-output-dir ./data/mwd/train/x2/hr --lr-output-dir ./data/mwd/train/x2/lr --scale 2
+流水线输入要求：
+
+- `--oper-nc` 必须包含 `u10` 和 `v10`
+- `--wave-nc` 必须包含 `mwd`、`mwp` 和 `swh`
+- `--wave-nc` 中所有变量必须来自同一片空间范围，因此可以共用同一个有效区域 mask
+
+流水线会生成：
+
+```text
+../dataset-2022/test/
+├── wind/x2/hr/*.npy
+├── wind/x2/lr/*.npy
+├── wind/x4/hr/*.npy
+├── wind/x4/lr/*.npy
+├── mwd/x2/hr/*.npy
+├── mwd/x2/lr/*.npy
+├── mwd/x2/mask.npy
+├── mwd/x4/mask.npy
+├── mwp/x2/...
+├── swh/x2/...
+└── ...
 ```
 
-`scripts/encode_mwd_cos_sin.py` 会：
+处理规则：
 
-- 读取目录下全部 `mwd` `.npy`
-- 若样本中包含 `None`，先补成 `0`
-- 统一转成 `float32`
-- 按角度值输出 `2×H×W` 的 `cos/sin` 双通道编码
-- 保留原文件名保存到输出目录
-
-如果你会对多个数据集分别做预处理，建议显式指定统计文件路径，避免默认的 `stats.json` 被后一次运行覆盖，例如：
-
-```bash
-uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/train/x2/hr --lr-output-dir ./data/wind/train/x2/lr --scale 2 --stats-path ./data/wind/train/stats_wind_x2.json
-```
-
-这个脚本会：
-
-- 读取输入目录下全部 `.npy`
-- 统一保存为 `float32` 的 `C×H×W`
-- 若尺寸不能被 `scale` 整除，则裁掉右侧和下侧多余像素
-- 使用 torchvision 的 bicubic 插值生成 LR
-- 按全体处理后 HR 样本统计 `mean/std`
-- 输出 `stats.json`（或通过 `--stats-path` 指定的文件）
-
-约束：
-
-- 原始 HR 输入目录、处理后 HR 输出目录、LR 输出目录必须互不相同
-- 原图中若包含 `None`，默认填成 `0`
-- 单通道输入可以是 `H×W`
-- 多通道输入可以是 `C×H×W`
+- `wind` 由 `u10` 和 `v10` 通过 `sqrt(u10^2 + v10^2)` 合成
+- `mwd` 先按角度制编码为 `cos/sin` 双通道，再生成 `HR/LR`
+- `mwd`、`mwp`、`swh` 会保存 `H×W` 的 `bool` 类型 `mask.npy`
+- mask 取第一个时间帧生成，`True` 表示有效区域，`False` 表示 `NaN` 或无效区域
+- 原始数据中的 `NaN` 会填成 `0`
+- 所有数组保存为 `float32`
+- 测试集不单独统计 `mean/std`，归一化统计量应来自训练集
 
 ## 10. 模型与损失
 
