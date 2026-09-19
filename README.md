@@ -14,9 +14,8 @@ README 的目标不是记录历史，而是回答 3 个问题：
 2. 配置为什么这样组织
 3. 新模型怎么接进来
 
-## 快速开始
 
-### 1. 安装依赖
+## 配置环境
 
 项目当前采用“两种后端二选一”的安装方式。
 
@@ -49,117 +48,6 @@ uv run python -c "import torch; print(torch.__version__); print(torch.version.cu
 - CPU 环境下，`torch.version.cuda` 通常是 `None`
 - CUDA 环境下，`torch.version.cuda` 应非空，且 `torch.cuda.is_available()` 应为 `True`
 
-### 2. 选择模型
-
-修改 `configs/models/*.yaml`，例如：
-
-```yaml
-# configs/models/edsr.yaml
-name: edsr
-params:
-  n_feats: 64
-  n_resblocks: 16
-  res_scale: 0.2
-```
-
-### 3. 配好数据路径后直接运行
-
-训练：
-
-```bash
-uv run python scripts/train.py
-```
-
-评估：
-
-```bash
-uv run python scripts/evaluate.py evaluate.checkpoint=./checkpoints/.../best.pth
-```
-
-推理：
-
-```bash
-uv run python scripts/infer.py infer.checkpoint=./checkpoints/.../best.pth
-```
-
-### 4. 串行实验队列
-
-如果你需要“一个实验结束立刻跑下一个，失败也继续下一个”，可以使用队列执行器：
-
-```bash
-uv run python scripts/run_queue.py --queue jobs/queue.txt
-```
-
-当前 `jobs/queue.txt` 是训练队列模板，覆盖：
-
-- 全部内置模型
-- `wind` / `mwd` / `mwp` / `swh` 四个数据集
-- 其中 `mwd` 按 2 通道处理，其余数据集按 1 通道处理
-
-队列中的命令优先通过 `--config-name <dataset>/train_x{scale}` 选择数据集配置，例如：
-
-```bash
-uv run python scripts/train.py --config-name wind/train_x2 models=edsr
-uv run python scripts/train.py --config-name mwd/train_x4 models=swinir
-```
-
-也就是说，数据路径、`upscale`、`data_norm`、默认 `lr_patch_size` 已经放进对应 YAML，命令行通常只需要覆盖少量实验变量，例如：
-
-- `models=...`
-- `models.in_dim=...`
-- `train.lr=...`
-- `resume.checkpoint=...`
-
-只检查任务而不真正执行：
-
-```bash
-uv run python scripts/run_queue.py --queue jobs/queue.txt --dry-run
-```
-
-### 5. 数据预处理
-
-如果你手头只有原始 HR `.npy` 目录，可以先用预处理脚本统一生成训练用的 `HR/LR` 配对数据：
-
-```bash
-uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/train/x2/hr --lr-output-dir ./data/wind/train/x2/lr --scale 2
-```
-
-对于 `mwd` 数据集，建议先进行 `cos/sin` 双通道编码，再做下采样预处理。原因是 `mwd` 表示角度，训练时若使用 `MSE` 一类逐点重建损失，直接回归角度值会把 `0°` 和 `360°` 误当成相距很远的数值。推荐流程是：
-
-```bash
-uv run python scripts/encode_mwd_cos_sin.py --input-dir ./raw_mwd_hr --output-dir ./encoded_mwd_hr
-uv run python scripts/preprocess_dataset.py --hr-input-dir ./encoded_mwd_hr --hr-output-dir ./data/mwd/train/x2/hr --lr-output-dir ./data/mwd/train/x2/lr --scale 2
-```
-
-`scripts/encode_mwd_cos_sin.py` 会：
-
-- 读取目录下全部 `mwd` `.npy`
-- 若样本中包含 `None`，先补成 `0`
-- 统一转成 `float32`
-- 按角度值输出 `2×H×W` 的 `cos/sin` 双通道编码
-- 保留原文件名保存到输出目录
-
-如果你会对多个数据集分别做预处理，建议显式指定统计文件路径，避免默认的 `stats.json` 被后一次运行覆盖，例如：
-
-```bash
-uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/train/x2/hr --lr-output-dir ./data/wind/train/x2/lr --scale 2 --stats-path ./data/wind/train/stats_wind_x2.json
-```
-
-这个脚本会：
-
-- 读取输入目录下全部 `.npy`
-- 统一保存为 `float32` 的 `C×H×W`
-- 若尺寸不能被 `scale` 整除，则裁掉右侧和下侧多余像素
-- 使用 torchvision 的 bicubic 插值生成 LR
-- 按全体处理后 HR 样本统计 `mean/std`
-- 输出 `stats.json`（或通过 `--stats-path` 指定的文件）
-
-约束：
-
-- 原始 HR 输入目录、处理后 HR 输出目录、LR 输出目录必须互不相同
-- 原图中若包含 `None`，默认填成 `0`
-- 单通道输入可以是 `H×W`
-- 多通道输入可以是 `C×H×W`
 
 ## 项目结构
 
@@ -292,23 +180,9 @@ train:
 ### 启动命令
 
 ```bash
-uv run python scripts/train.py
-```
-
-常用 override 示例：
-
-```bash
-uv run python scripts/train.py models=camixer train.epochs=50 train.batch_size=8
-uv run python scripts/train.py dataset.train_lr_root=./data/... dataset.train_hr_root=./data/...
-uv run python scripts/train.py --config-name wind/train_x2 models=rcan
-```
-
-### 分布式训练
-
-当前仅支持 PyTorch DDP，使用 `torchrun` 启动。
-
-```bash
-torchrun --nproc_per_node=4 scripts/train.py
+uv run python scripts/train.py \
+  --config-name wind/train_x2 \
+  models=mysr
 ```
 
 ## 评估
@@ -343,18 +217,30 @@ evaluate:
   num_workers: 4
 ```
 
-### 启动命令
+### 启动命令（以 mwp 为例）
 
 ```bash
-uv run python scripts/evaluate.py evaluate.checkpoint=./checkpoints/.../best.pth
+uv run python scripts/evaluate.py \
+  --config-name mwp/evaluate_x4 \
+  models=mysr \
+  +models.in_dim=1 \
+  evaluate.checkpoint=./checkpoints/mysr/mwp/x4/last.pth \
+  dataset.eval_lr_root=../dataset/test/mwp/x4/lr \
+  dataset.eval_hr_root=../dataset/test/mwp/x4/hr \
+  evaluate.mask=../dataset/test/mwp/x4/mask.npy
 ```
 
-常用 override 示例：
+以 mwd 为例（注意 `in_dim=2`，且 mwd 的 `data_norm` 有 2 个通道）：
 
 ```bash
-uv run python scripts/evaluate.py models=camixer evaluate.checkpoint=./checkpoints/.../best.pth
-uv run python scripts/evaluate.py dataset.eval_lr_root=./data/... dataset.eval_hr_root=./data/...
-uv run python scripts/evaluate.py --config-name wind/evaluate_x2 evaluate.checkpoint=./checkpoints/.../best.pth evaluate.batch_size=4
+uv run python scripts/evaluate.py \
+  --config-name mwd/evaluate_x4 \
+  models=mysr \
+  +models.in_dim=2 \
+  evaluate.checkpoint=./checkpoints/mysr/mwd/x4/last.pth \
+  dataset.eval_lr_root=../dataset/test/mwd/x4/lr \
+  dataset.eval_hr_root=../dataset/test/mwd/x4/hr \
+  evaluate.mask=../dataset/test/mwd/x4/mask.npy
 ```
 
 ## 推理
@@ -390,16 +276,15 @@ infer:
 ### 启动命令
 
 ```bash
-uv run python scripts/infer.py infer.checkpoint=./checkpoints/.../best.pth
+uv run python scripts/infer.py \
+  --config-name mwp/infer_x4 \
+  models=mysr \
+  +models.in_dim=1 \
+  infer.checkpoint=./checkpoints/mysr/mwp/x4/last.pth \
+  dataset.infer_lr_root=../dataset/test/mwp/x4/lr \
+  infer.mask=../dataset/test/mwp/x4/mask.npy
 ```
 
-常用 override 示例：
-
-```bash
-uv run python scripts/infer.py models=edsr infer.checkpoint=./checkpoints/.../best.pth
-uv run python scripts/infer.py dataset.infer_lr_root=./data/...
-uv run python scripts/infer.py --config-name wind/infer_x2 infer.checkpoint=./checkpoints/.../best.pth infer.batch_size=4
-```
 
 ## 断点续训
 
@@ -448,33 +333,41 @@ uv run python scripts/train.py resume.checkpoint=./checkpoints/.../last.pth
 - `models.params`
 - `upscale`
 
+## 串行实验队列
+
+如果你需要“一个实验结束立刻跑下一个，失败也继续下一个”，可以使用队列执行器：
+
+```bash
+uv run python scripts/run_queue.py --queue jobs/queue.txt
+```
+
+当前 `jobs/queue.txt` 是训练队列模板，覆盖：
+
+- 全部内置模型
+- `wind` / `mwd` / `mwp` / `swh` 四个数据集
+
+只检查任务而不真正执行：
+
+```bash
+uv run python scripts/run_queue.py --queue jobs/queue.txt --dry-run
+```
+
 ## 数据格式与目录约定
 
 当前数据以 `.npy` 为基本格式。
 
-### 训练
+### Checkpoint 默认保存路径
 
-训练必须显式提供：
+Checkpoint 会按 `<checkpoint_dir>/<模型名>/<数据集名>/x<倍数>/` 自动组织。例如 `mysr` 训练 `mwp` 数据集 `x4` 时，保存路径为：
 
-- `train_lr_root`
-- `train_hr_root`
-- `val_lr_root`
-- `val_hr_root`
+```text
+checkpoints/mysr/mwp/x4/
+├── best.pth      # 验证指标最优的权重
+├── last.pth      # 最近一次训练结束时的权重
+└── epoch_XXX.pth # 按 train.checkpoint.every 周期保存的权重
+```
 
-### 评估
-
-评估必须显式提供：
-
-- `eval_lr_root`
-- `eval_hr_root`
-
-### 推理
-
-推理只需要显式提供：
-
-- `infer_lr_root`
-
-### 目录示例
+### 数据存放目录示例
 
 ```text
 data/
@@ -505,31 +398,52 @@ data/
 - `LR/HR`、通道组织方式以及 `mean/std` 由实验人员自行准备
 - `wind`、`mwp`、`swh` 当前按 1 通道处理
 - `mwd` 当前按 2 通道处理
-- 单通道数据可以直接存为 `HxW`
-- 多通道数据可以直接存为 `CxHxW`，并提供匹配通道数的 `mean/std`
-- 使用 `scripts/preprocess_dataset.py` 预处理后，导出的 HR/LR 会统一保存为 `C×H×W`
+- 数据可以直接存为 `CxHxW`，并提供匹配通道数的 `mean/std`
 
-## 输出目录说明
+### 数据预处理
 
-### `paths.checkpoint_dir`
+如果你手头只有原始 HR `.npy` 目录，可以先用预处理脚本统一生成训练用的 `HR/LR` 配对数据：
 
-用于保存权重文件，例如：
+```bash
+uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/train/x2/hr --lr-output-dir ./data/wind/train/x2/lr --scale 2
+```
 
-- `epoch_010.pth`
-- `best.pth`
-- `last.pth`
+对于 `mwd` 数据集，建议先进行 `cos/sin` 双通道编码，再做下采样预处理。原因是 `mwd` 表示角度，训练时若使用 `MSE` 一类逐点重建损失，直接回归角度值会把 `0°` 和 `360°` 误当成相距很远的数值。推荐流程是：
 
-含义：
+```bash
+uv run python scripts/encode_mwd_cos_sin.py --input-dir ./raw_mwd_hr --output-dir ./encoded_mwd_hr
+uv run python scripts/preprocess_dataset.py --hr-input-dir ./encoded_mwd_hr --hr-output-dir ./data/mwd/train/x2/hr --lr-output-dir ./data/mwd/train/x2/lr --scale 2
+```
 
-- `epoch_xxx.pth`：周期性保存
-- `best.pth`：当前最佳指标对应的 checkpoint
-- `last.pth`：最近一次训练状态
+`scripts/encode_mwd_cos_sin.py` 会：
 
-### `paths.experiment_dir`
+- 读取目录下全部 `mwd` `.npy`
+- 若样本中包含 `None`，先补成 `0`
+- 统一转成 `float32`
+- 按角度值输出 `2×H×W` 的 `cos/sin` 双通道编码
+- 保留原文件名保存到输出目录
 
-用于保存运行目录、日志、Hydra 输出和配置快照。
+如果你会对多个数据集分别做预处理，建议显式指定统计文件路径，避免默认的 `stats.json` 被后一次运行覆盖，例如：
 
-评估与推理在启用结果保存时，也会在 `save_dir/<Model>/<dataset>/x{upscale}/` 下按样本写出 `.npy` 结果。
+```bash
+uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-dir ./data/wind/train/x2/hr --lr-output-dir ./data/wind/train/x2/lr --scale 2 --stats-path ./data/wind/train/stats_wind_x2.json
+```
+
+这个脚本会：
+
+- 读取输入目录下全部 `.npy`
+- 统一保存为 `float32` 的 `C×H×W`
+- 若尺寸不能被 `scale` 整除，则裁掉右侧和下侧多余像素
+- 使用 torchvision 的 bicubic 插值生成 LR
+- 按全体处理后 HR 样本统计 `mean/std`
+- 输出 `stats.json`（或通过 `--stats-path` 指定的文件）
+
+约束：
+
+- 原始 HR 输入目录、处理后 HR 输出目录、LR 输出目录必须互不相同
+- 原图中若包含 `None`，默认填成 `0`
+- 单通道输入可以是 `H×W`
+- 多通道输入可以是 `C×H×W`
 
 ## 模型与损失
 
@@ -552,9 +466,8 @@ data/
 - `l2`
 - `mse`
 
-## 新增模型如何接入
+### 新增模型如何接入
 
-当前模型系统基于注册机制，不再依赖 `if-elif` 分发。
 
 新增模型的标准步骤：
 
@@ -577,44 +490,6 @@ data/
 
 这意味着新模型不必手工接入单独的训练分支，只要遵守统一输出约定，就能复用现有训练、评估、推理流程。
 
-## 运行前校验与常见错误
-
-在真正创建 dataloader 前，程序会做运行前校验。
-
-### 训练校验
-
-- `train_lr_root` / `train_hr_root` / `val_lr_root` / `val_hr_root` 必须存在
-- 必须是目录
-- 目录下必须包含 `.npy`
-- `LR/HR` 文件名必须能正确配对
-
-### 评估校验
-
-- `eval_lr_root` / `eval_hr_root` 必须存在
-- 必须是目录
-- 必须有可配对样本
-- `evaluate.mask` 若填写，必须是 `.npy`
-
-### 推理校验
-
-- `infer_lr_root` 必须存在
-- 必须是目录
-- 至少包含一个 `.npy`
-- `infer.mask` 若填写，必须是 `.npy`
-
-### 其他配置校验
-
-- `LR/HR` 路径不能相同
-- `train.checkpoint.every` 不能大于 `train.epochs`
-- `resume.checkpoint` / `evaluate.checkpoint` / `infer.checkpoint` 必须是 `.pth` 或 `.pt`
-
-如果启动即报错，优先检查：
-
-1. 路径是否写错
-2. `LR/HR` 是否同名配对
-3. 模型名与配置文件是否一致
-4. checkpoint 是否和当前模型 / 参数配置匹配
-
 ## 测试
 
 完整测试：
@@ -628,14 +503,3 @@ uv run pytest tests -q
 ```bash
 uv run pytest tests/test_config.py tests/test_engine.py tests/test_evaluator.py tests/test_metrics.py tests/test_run_queue.py -q
 ```
-
-## 建议的阅读顺序
-
-如果你是第一次接手这个项目，建议按下面顺序看：
-
-1. `configs/train.yaml`、`configs/evaluate.yaml`、`configs/infer.yaml`
-2. `configs/wind/train_x2.yaml` 这类按数据集拆开的任务配置
-3. `configs/models/*.yaml`
-4. `scripts/train.py`、`scripts/evaluate.py`、`scripts/infer.py`
-5. `src/app/` 和 `src/core/`
-6. `src/models/` 与 `src/losses/`
