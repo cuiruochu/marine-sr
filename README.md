@@ -15,7 +15,7 @@ README 的目标不是记录历史，而是回答 3 个问题：
 3. 新模型怎么接进来
 
 
-## 配置环境
+## 1. 配置环境
 
 项目当前采用“两种后端二选一”的安装方式。
 
@@ -49,7 +49,7 @@ uv run python -c "import torch; print(torch.__version__); print(torch.version.cu
 - CUDA 环境下，`torch.version.cuda` 应非空，且 `torch.cuda.is_available()` 应为 `True`
 
 
-## 项目结构
+## 2. 项目结构
 
 ```text
 src/
@@ -81,7 +81,7 @@ scripts/
 └── preprocess_dataset.py
 ```
 
-## 配置设计
+## 3. 配置设计
 
 这个项目把配置拆成“模型”和“任务场景”两层。
 
@@ -117,7 +117,7 @@ scripts/
 
 这些 YAML 会把数据路径、`upscale`、`data_norm`、`models.in_dim` 等固定信息直接写死，方便队列执行和批量实验。
 
-## 训练
+## 4. 训练
 
 训练配置只关心这几类信息：
 
@@ -185,7 +185,7 @@ uv run python scripts/train.py \
   models=mysr
 ```
 
-## 评估
+## 5. 评估
 
 这里的评估指“配对评估”：输入为成对的 `LR/HR` 数据，计算指标。
 
@@ -243,7 +243,7 @@ uv run python scripts/evaluate.py \
   evaluate.mask=../dataset/test/mwd/x4/mask.npy
 ```
 
-## 推理
+## 6. 推理
 
 这里的推理指“离线推理”：只输入 `LR`，不要求提供 `HR`。
 
@@ -286,7 +286,7 @@ uv run python scripts/infer.py \
 ```
 
 
-## 断点续训
+## 7. 断点续训
 
 恢复训练时：
 
@@ -333,7 +333,7 @@ uv run python scripts/train.py resume.checkpoint=./checkpoints/.../last.pth
 - `models.params`
 - `upscale`
 
-## 串行实验队列
+## 8. 串行实验队列
 
 如果你需要“一个实验结束立刻跑下一个，失败也继续下一个”，可以使用队列执行器：
 
@@ -352,7 +352,7 @@ uv run python scripts/run_queue.py --queue jobs/queue.txt
 uv run python scripts/run_queue.py --queue jobs/queue.txt --dry-run
 ```
 
-## 数据格式与目录约定
+## 9. 数据格式与目录约定
 
 当前数据以 `.npy` 为基本格式。
 
@@ -445,7 +445,7 @@ uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-
 - 单通道输入可以是 `H×W`
 - 多通道输入可以是 `C×H×W`
 
-## 模型与损失
+## 10. 模型与损失
 
 ### 当前内置模型
 
@@ -490,7 +490,7 @@ uv run python scripts/preprocess_dataset.py --hr-input-dir ./raw_hr --hr-output-
 
 这意味着新模型不必手工接入单独的训练分支，只要遵守统一输出约定，就能复用现有训练、评估、推理流程。
 
-## 测试
+## 11. 测试
 
 完整测试：
 
